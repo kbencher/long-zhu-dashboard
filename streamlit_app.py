@@ -27,6 +27,7 @@ WORKSTREAM_COLORS = {
     'Marketing':        '#1F5A8C',
     'Community':        '#5B47B0',
     'Sales & Ops':      '#6E7479',
+    '_hidden':          'rgba(0,0,0,0)',   # filtered-out rows
 }
 FILTER_TO_WS = {
     'All':         None,
@@ -250,20 +251,13 @@ def render_gantt(df: pd.DataFrame, today: datetime,
             line=dict(color='#eee', width=1),
             layer='below',
         )
-    yaxis_kwargs = dict(
+    fig.update_yaxes(
+        autorange='reversed',
         showgrid=False,
         title_text='Activity',
         title_font=dict(size=13, color='#222', family='Inter'),
         tickfont=dict(size=12, color='#222'),
     )
-    if all_labels:
-        # Lock the y-axis to the full task list so filtered views still
-        # show every row position.  Reverse so first task is at top.
-        yaxis_kwargs['categoryorder'] = 'array'
-        yaxis_kwargs['categoryarray'] = list(reversed(all_labels))
-    else:
-        yaxis_kwargs['autorange'] = 'reversed'
-    fig.update_yaxes(**yaxis_kwargs)
 
     # Keep chart height constant even when filters reduce the visible rows.
     # If `total_rows` is supplied, size the canvas to that — bars get a bit
@@ -340,23 +334,27 @@ legend_html += (
 )
 st.markdown(legend_html, unsafe_allow_html=True)
 
-# Apply filters
+# Apply filters by HIDING non-matching bars (transparent) rather than
+# removing them.  This keeps every task row visible on the y-axis so the
+# chart canvas stays the same size whether 1 task or all are selected.
 selected_ws = FILTER_TO_WS.get(filter_choice)
 df_view = df.copy()
+mask = pd.Series(True, index=df_view.index)
 if selected_ws:
-    df_view = df_view[df_view['workstream'] == selected_ws]
+    mask &= (df_view['workstream'] == selected_ws)
 if selected_owners:
-    df_view = df_view[df_view['owner'].isin(selected_owners)]
+    mask &= df_view['owner'].isin(selected_owners)
 
-if df_view.empty:
+if not mask.any():
     st.warning('No tasks matched the current filters.')
     st.stop()
 
-fig = render_gantt(
-    df_view, today=datetime.now(),
-    all_labels=df['_label'].tolist(),   # lock y-axis to full set
-    total_rows=len(df),
-)
+# For filtered-out rows: swap workstream to '_hidden' (transparent color)
+# and blank the owner label so nothing renders inside the bar.
+df_view.loc[~mask, 'workstream'] = '_hidden'
+df_view.loc[~mask, 'owner'] = ''
+
+fig = render_gantt(df_view, today=datetime.now(), total_rows=len(df))
 st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
 st.caption(f'{len(df_view)} active task(s) shown · '
