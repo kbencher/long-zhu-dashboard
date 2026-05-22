@@ -42,10 +42,24 @@ FILTER_TO_WS = {
 SHEET_KEY = '1rKFY6S-VZFnOkZLs_JeNtZSkFZIkyVbSROSrmx0rb40'
 
 
+TASKS_TAB_GID = 1610950122   # 'Copy of Sheet1' — clean Gantt-input layout
+
+
 @st.cache_data(ttl=300)
 def load_tasks() -> pd.DataFrame:
-    """Pull tasks from the Long Zhu Budget Google Sheet and normalise into a
-    flat DataFrame ready for plotting."""
+    """Pull tasks from the Gantt-input tab of the Long Zhu Budget sheet.
+
+    Layout (row 5 is the header):
+        A  (blank)
+        B  Stream         — workstream (Game Development, Testing, Marketing,
+                            Community, Sales & Ops)
+        C  Owner
+        D  Notes          — task description shown on the row label
+        E  Start Date     — mm/dd/yy
+        F  Months         — integer duration
+    Section header rows (e.g. 'GAME DEVELOPMENT' in CAPS) and rows missing
+    Start Date or Months are skipped.
+    """
     import gspread
     from google.oauth2.service_account import Credentials
 
@@ -56,7 +70,11 @@ def load_tasks() -> pd.DataFrame:
     )
     gc = gspread.authorize(creds)
     sh = gc.open_by_key(SHEET_KEY)
-    rows = sh.sheet1.get('A1:I40', value_render_option='FORMATTED_VALUE')
+    # Find the worksheet by gid (more stable than tab name)
+    ws = next((w for w in sh.worksheets() if w.id == TASKS_TAB_GID), None)
+    if ws is None:
+        raise RuntimeError(f'Tasks tab (gid {TASKS_TAB_GID}) not found.')
+    rows = ws.get('A1:F100', value_render_option='FORMATTED_VALUE')
 
     def _parse_date(s):
         if not s:
@@ -68,41 +86,31 @@ def load_tasks() -> pd.DataFrame:
                 pass
         return None
 
-    section = 'Monthly'
     out = []
     for r in rows:
-        if not r or len(r) < 8:
+        if not r or len(r) < 6:
             continue
-        if len(r) > 1 and 'One-Time' in str(r[1]):
-            section = 'One-Time'
+        stream = str(r[1] or '').strip() if len(r) > 1 else ''
+        owner  = str(r[2] or '').strip() if len(r) > 2 else ''
+        notes  = str(r[3] or '').strip() if len(r) > 3 else ''
+        start  = _parse_date(r[4]) if len(r) > 4 else None
+        months_raw = str(r[5] or '').strip() if len(r) > 5 else ''
+
+        if not start or not months_raw:
             continue
-        active_raw = str(r[0]).strip().upper()
-        if section == 'Monthly':
-            active = True
-        else:
-            active = (active_raw == 'TRUE')
-        if not active:
+        try:
+            n_months = int(float(months_raw.replace(',', '')))
+        except (ValueError, AttributeError):
             continue
-        start = _parse_date(r[7] if len(r) > 7 else '')
-        if not start:
-            continue
-        col_i = str(r[8] or '').strip() if len(r) > 8 else ''
-        end = _parse_date(col_i)
-        if end is None:
-            try:
-                n = int(float(col_i.replace(',', '')))
-                end = start + relativedelta(months=n)
-            except (ValueError, AttributeError):
-                continue
-        ws_group = str(r[2] or section).strip()
-        # Bucket into workstreams matching the mockup
-        bucket = _bucket_workstream(ws_group, str(r[1] or '').strip())
+        end = start + relativedelta(months=n_months)
+
+        bucket = _bucket_workstream(stream, '')
         out.append({
             'workstream': bucket,
-            'sub':        ws_group,
-            'department': str(r[1] or '').strip(),
-            'owner':      str(r[3] or 'TBD').strip() or 'TBD',
-            'notes':      str(r[4] or '').strip() if len(r) > 4 else '',
+            'sub':        stream,
+            'department': stream,
+            'owner':      owner or 'TBD',
+            'notes':      notes,
             'start':      start,
             'end':        end,
         })
