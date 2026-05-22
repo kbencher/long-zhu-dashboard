@@ -31,7 +31,7 @@ WORKSTREAM_COLORS = {
 }
 FILTER_TO_WS = {
     'All':         None,
-    'Game dev':    'Game Development',
+    'Game Dev':    'Game Development',
     'Testing':     'Testing',
     'Marketing':   'Marketing',
     'Community':   'Community',
@@ -320,7 +320,7 @@ legend_html = (
     'font-size:13px; color:#444; margin-top:6px; margin-bottom:14px;">'
 )
 for label, color in [
-    ('Game development', WORKSTREAM_COLORS['Game Development']),
+    ('Game Development', WORKSTREAM_COLORS['Game Development']),
     ('Testing',          WORKSTREAM_COLORS['Testing']),
     ('Marketing',        WORKSTREAM_COLORS['Marketing']),
     ('Community',        WORKSTREAM_COLORS['Community']),
