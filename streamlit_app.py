@@ -184,6 +184,8 @@ def render_gantt(df: pd.DataFrame, today: datetime,
     # (px.timeline groups bars by color into traces; setting text via
     # update_traces() can mis-align across trace groups).
     import plotly.express as px
+    df = df.copy()
+    df['_owner_bold'] = df['owner'].apply(lambda o: f'<b>{o}</b>' if o else '')
     fig = px.timeline(
         df,
         x_start='start',
@@ -191,7 +193,7 @@ def render_gantt(df: pd.DataFrame, today: datetime,
         y='_label',
         color='workstream',
         color_discrete_map=WORKSTREAM_COLORS,
-        text='owner',
+        text='_owner_bold',
         custom_data=['owner', 'notes', 'department'],
     )
 
@@ -199,7 +201,7 @@ def render_gantt(df: pd.DataFrame, today: datetime,
     fig.update_traces(
         textposition='inside',
         insidetextanchor='middle',
-        textfont=dict(color='white', size=11, family='Inter'),
+        textfont=dict(color='white', size=12, family='Inter'),
         marker_cornerradius=8,
         hovertemplate=(
             '<b>%{customdata[1]}</b><br>'
