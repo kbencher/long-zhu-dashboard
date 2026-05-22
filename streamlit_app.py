@@ -246,6 +246,8 @@ def render_gantt(df: pd.DataFrame, today: datetime):
     fig.update_yaxes(
         autorange='reversed',
         showgrid=False,
+        title_text='Activity',
+        title_font=dict(size=13, color='#222', family='Inter'),
         tickfont=dict(size=12, color='#222'),
     )
 
