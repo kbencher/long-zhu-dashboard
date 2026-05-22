@@ -158,18 +158,26 @@ def _task_label(row) -> str:
 
 
 # ── Build Plotly Gantt ──────────────────────────────────────────────────────
-def render_gantt(df: pd.DataFrame, today: datetime, total_rows: int = None):
-    # Order: by workstream (in mockup order), then by start date
+def prepare_df(df: pd.DataFrame) -> pd.DataFrame:
+    """Sort by workstream order + start date, and build unique y-axis labels.
+    Run this once on the *full* dataset before any filtering so that label
+    identities stay stable across the unfiltered / filtered views."""
     ws_order = ['Game Development', 'Testing', 'Marketing', 'Community', 'Sales & Ops']
+    df = df.copy()
     df['_ws_rank'] = df['workstream'].map({w: i for i, w in enumerate(ws_order)})
     df = df.sort_values(['_ws_rank', 'start']).reset_index(drop=True)
     df['_label'] = df.apply(_task_label, axis=1)
-    # Plotly's category axis dedupes identical labels into the same row, so
-    # for visually-identical labels (e.g., two TBDs) we'd lose rows.  Make
-    # each label unique by appending a zero-width identifier.
+    # Make labels unique (Plotly's category axis dedupes identical labels).
     df['_label'] = [f"{lbl}<span style='display:none'>{i}</span>"
                      for i, lbl in enumerate(df['_label'])]
     df['_color'] = df['workstream'].map(WORKSTREAM_COLORS)
+    return df
+
+
+def render_gantt(df: pd.DataFrame, today: datetime,
+                  all_labels: list = None, total_rows: int = None):
+    """Render the Gantt.  Pass `all_labels` to lock the y-axis to the full
+    set of categories (so filtered views still show every row position)."""
 
     # Use px.timeline — purpose-built Gantt that handles date-typed axes.
     # Pass `text='owner'` directly so each bar gets the right row's owner
@@ -199,8 +207,7 @@ def render_gantt(df: pd.DataFrame, today: datetime, total_rows: int = None):
         ),
     )
 
-    # Reverse y so the first task is on top
-    fig.update_yaxes(autorange='reversed')
+    # (y-axis ordering set later via categoryarray or autorange)
 
     # Vertical "Today" marker
     fig.add_vline(
@@ -243,13 +250,20 @@ def render_gantt(df: pd.DataFrame, today: datetime, total_rows: int = None):
             line=dict(color='#eee', width=1),
             layer='below',
         )
-    fig.update_yaxes(
-        autorange='reversed',
+    yaxis_kwargs = dict(
         showgrid=False,
         title_text='Activity',
         title_font=dict(size=13, color='#222', family='Inter'),
         tickfont=dict(size=12, color='#222'),
     )
+    if all_labels:
+        # Lock the y-axis to the full task list so filtered views still
+        # show every row position.  Reverse so first task is at top.
+        yaxis_kwargs['categoryorder'] = 'array'
+        yaxis_kwargs['categoryarray'] = list(reversed(all_labels))
+    else:
+        yaxis_kwargs['autorange'] = 'reversed'
+    fig.update_yaxes(**yaxis_kwargs)
 
     # Keep chart height constant even when filters reduce the visible rows.
     # If `total_rows` is supplied, size the canvas to that — bars get a bit
@@ -275,7 +289,7 @@ st.write('')
 
 # Load tasks early so the owner filter knows what options to show
 try:
-    df = load_tasks()
+    df = prepare_df(load_tasks())
 except Exception as e:
     st.error(f'Could not load Long Zhu Budget sheet: {e}')
     st.stop()
@@ -338,7 +352,11 @@ if df_view.empty:
     st.warning('No tasks matched the current filters.')
     st.stop()
 
-fig = render_gantt(df_view, today=datetime.now(), total_rows=len(df))
+fig = render_gantt(
+    df_view, today=datetime.now(),
+    all_labels=df['_label'].tolist(),   # lock y-axis to full set
+    total_rows=len(df),
+)
 st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
 st.caption(f'{len(df_view)} active task(s) shown · '
