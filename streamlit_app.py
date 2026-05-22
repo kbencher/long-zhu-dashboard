@@ -141,47 +141,52 @@ def render_gantt(df: pd.DataFrame, today: datetime):
     df['_ws_rank'] = df['workstream'].map({w: i for i, w in enumerate(ws_order)})
     df = df.sort_values(['_ws_rank', 'start']).reset_index(drop=True)
     df['_label'] = df.apply(_task_label, axis=1)
+    # Plotly's category axis dedupes identical labels into the same row, so
+    # for visually-identical labels (e.g., two TBDs) we'd lose rows.  Make
+    # each label unique by appending a zero-width identifier.
+    df['_label'] = [f"{lbl}<span style='display:none'>{i}</span>"
+                     for i, lbl in enumerate(df['_label'])]
     df['_color'] = df['workstream'].map(WORKSTREAM_COLORS)
 
-    fig = go.Figure()
+    # Use px.timeline — purpose-built Gantt that handles date-typed axes
+    import plotly.express as px
+    fig = px.timeline(
+        df,
+        x_start='start',
+        x_end='end',
+        y='_label',
+        color='workstream',
+        color_discrete_map=WORKSTREAM_COLORS,
+        custom_data=['owner', 'notes', 'department'],
+    )
 
-    # Add bars
-    for _, r in df.iterrows():
-        duration_ms = (r['end'] - r['start']).total_seconds() * 1000
-        fig.add_trace(go.Bar(
-            x=[duration_ms],
-            base=[r['start']],
-            y=[r['_label']],
-            orientation='h',
-            marker=dict(color=r['_color'], line=dict(width=0)),
-            text=[r['owner']],
-            textposition='inside',
-            insidetextanchor='middle',
-            textfont=dict(color='white', size=11, family='Inter'),
-            hovertemplate=(f"<b>{r['notes'] or r['department']}</b><br>"
-                            f"Owner: {r['owner']}<br>"
-                            f"{r['start'].strftime('%b %Y')} → "
-                            f"{r['end'].strftime('%b %Y')}<extra></extra>"),
-            showlegend=False,
-        ))
+    # Owner label overlaid inside each bar
+    fig.update_traces(
+        text=df['owner'],
+        textposition='inside',
+        insidetextanchor='middle',
+        textfont=dict(color='white', size=11, family='Inter'),
+        hovertemplate=(
+            '<b>%{customdata[1]}</b><br>'
+            'Owner: %{customdata[0]}<br>'
+            '%{base|%b %Y} → %{x|%b %Y}<extra></extra>'
+        ),
+    )
 
-    # Group dividers between workstreams (faint horizontal lines + section labels)
-    # Plotly's y-axis is reversed because Bar default is bottom-up
+    # Reverse y so the first task is on top
     fig.update_yaxes(autorange='reversed')
 
-    # Vertical "Today" line
-    fig.add_shape(
-        type='line',
-        x0=today, x1=today,
-        y0=-0.5, y1=len(df) - 0.5,
-        xref='x', yref='y',
+    # Vertical "Today" marker
+    fig.add_vline(
+        x=today,
         line=dict(color='#e74c3c', width=2),
     )
 
-    # X-axis: monthly ticks
+    # X-axis: monthly ticks across the top
     x_min = df['start'].min() - relativedelta(days=10)
     x_max = df['end'].max() + relativedelta(days=10)
     fig.update_xaxes(
+        type='date',
         range=[x_min, x_max],
         tickformat='%b %y',
         dtick='M1',
@@ -190,6 +195,9 @@ def render_gantt(df: pd.DataFrame, today: datetime):
         gridcolor='#eee',
         showline=False,
         tickfont=dict(size=11, color='#555'),
+        showticklabels=True,
+        ticks='outside',
+        ticklen=4,
     )
     fig.update_yaxes(
         autorange='reversed',
