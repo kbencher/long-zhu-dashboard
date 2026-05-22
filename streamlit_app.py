@@ -182,23 +182,41 @@ def render_gantt(df: pd.DataFrame, today: datetime):
         line=dict(color='#e74c3c', width=2),
     )
 
-    # X-axis: monthly ticks across the top
-    x_min = df['start'].min() - relativedelta(days=10)
-    x_max = df['end'].max() + relativedelta(days=10)
+    # X-axis: monthly labels centered between gridlines.
+    # Strategy: place tick LABELS at mid-month, draw GRIDLINES manually at
+    # month boundaries so the date hovers in the middle of its column.
+    x_min = df['start'].min().replace(day=1)
+    x_max = (df['end'].max() + relativedelta(months=1)).replace(day=1)
+    month_starts = pd.date_range(start=x_min, end=x_max, freq='MS')
+
+    tickvals, ticktext = [], []
+    for i in range(len(month_starts) - 1):
+        mid = month_starts[i] + (month_starts[i + 1] - month_starts[i]) / 2
+        tickvals.append(mid)
+        ticktext.append(month_starts[i].strftime('%b %y'))
+
     fig.update_xaxes(
         type='date',
         range=[x_min, x_max],
-        tickformat='%b %y',
-        dtick='M1',
+        tickmode='array',
+        tickvals=tickvals,
+        ticktext=ticktext,
         side='top',
-        showgrid=True,
-        gridcolor='#eee',
+        showgrid=False,                  # we draw gridlines as shapes below
         showline=False,
+        ticks='',
         tickfont=dict(size=11, color='#555'),
-        showticklabels=True,
-        ticks='outside',
-        ticklen=4,
     )
+    # Month-boundary vertical gridlines (drawn as shapes so they sit between
+    # the labels, not under them).
+    for ms in month_starts:
+        fig.add_shape(
+            type='line',
+            x0=ms, x1=ms,
+            y0=0, y1=1, yref='paper',
+            line=dict(color='#eee', width=1),
+            layer='below',
+        )
     fig.update_yaxes(
         autorange='reversed',
         showgrid=False,
