@@ -195,11 +195,12 @@ def render_gantt(df: pd.DataFrame, today: datetime,
         custom_data=['owner', 'notes', 'department'],
     )
 
-    # Style the owner label overlaid inside each bar
+    # Style the owner label overlaid inside each bar, plus rounded corners.
     fig.update_traces(
         textposition='inside',
         insidetextanchor='middle',
         textfont=dict(color='white', size=11, family='Inter'),
+        marker_cornerradius=8,
         hovertemplate=(
             '<b>%{customdata[1]}</b><br>'
             'Owner: %{customdata[0]}<br>'
