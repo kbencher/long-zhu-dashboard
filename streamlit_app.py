@@ -201,7 +201,7 @@ def render_gantt(df: pd.DataFrame, today: datetime,
     fig.update_traces(
         textposition='inside',
         insidetextanchor='middle',
-        textfont=dict(color='white', size=12, family='Inter'),
+        textfont=dict(color='white', size=12),
         marker_cornerradius=8,
         hovertemplate=(
             '<b>%{customdata[1]}</b><br>'
