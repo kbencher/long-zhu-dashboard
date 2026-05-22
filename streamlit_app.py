@@ -29,6 +29,16 @@ WORKSTREAM_COLORS = {
     'Sales & Ops':      '#6E7479',
     '_hidden':          'rgba(0,0,0,0)',   # filtered-out rows
 }
+
+# Color palette when "Color by: Round" is selected.  Extend as new rounds
+# (Series A, Series B…) appear in the sheet.
+ROUND_COLORS = {
+    'Pre-Seed': '#D4843F',   # warm amber
+    'Launch':   '#1A8FBF',   # teal blue
+    'Seed':     '#5B47B0',   # purple
+    'Series A': '#2D6A3F',   # green
+    'Series B': '#A03D2D',   # red
+}
 FILTER_TO_WS = {
     'All':         None,
     'Game Development': 'Game Development',
@@ -56,8 +66,9 @@ def load_tasks() -> pd.DataFrame:
                             Community, Sales & Ops)
         C  Owner
         D  Notes          — task description shown on the row label
-        E  Start Date     — mm/dd/yy
-        F  Months         — integer duration
+        E  Round          — Pre-Seed, Launch, Series A, ...
+        F  Start Date     — mm/dd/yy
+        G  Months         — integer duration
     Section header rows (e.g. 'GAME DEVELOPMENT' in CAPS) and rows missing
     Start Date or Months are skipped.
     """
@@ -75,7 +86,7 @@ def load_tasks() -> pd.DataFrame:
     ws = next((w for w in sh.worksheets() if w.id == TASKS_TAB_GID), None)
     if ws is None:
         raise RuntimeError(f'Tasks tab (gid {TASKS_TAB_GID}) not found.')
-    rows = ws.get('A1:F100', value_render_option='FORMATTED_VALUE')
+    rows = ws.get('A1:G100', value_render_option='FORMATTED_VALUE')
 
     def _parse_date(s):
         if not s:
@@ -89,13 +100,14 @@ def load_tasks() -> pd.DataFrame:
 
     out = []
     for r in rows:
-        if not r or len(r) < 6:
+        if not r or len(r) < 7:
             continue
-        stream = str(r[1] or '').strip() if len(r) > 1 else ''
-        owner  = str(r[2] or '').strip() if len(r) > 2 else ''
-        notes  = str(r[3] or '').strip() if len(r) > 3 else ''
-        start  = _parse_date(r[4]) if len(r) > 4 else None
-        months_raw = str(r[5] or '').strip() if len(r) > 5 else ''
+        stream     = str(r[1] or '').strip() if len(r) > 1 else ''
+        owner      = str(r[2] or '').strip() if len(r) > 2 else ''
+        notes      = str(r[3] or '').strip() if len(r) > 3 else ''
+        round_     = str(r[4] or '').strip() if len(r) > 4 else ''
+        start      = _parse_date(r[5]) if len(r) > 5 else None
+        months_raw = str(r[6] or '').strip() if len(r) > 6 else ''
 
         if not start or not months_raw:
             continue
@@ -108,6 +120,7 @@ def load_tasks() -> pd.DataFrame:
         bucket = _bucket_workstream(stream, '')
         out.append({
             'workstream': bucket,
+            'round':      round_ or 'Unspecified',
             'sub':        stream,
             'department': stream,
             'owner':      owner or 'TBD',
@@ -175,9 +188,11 @@ def prepare_df(df: pd.DataFrame) -> pd.DataFrame:
 ROW_HEIGHT_PX = 50      # fixed height per task row
 
 def render_gantt(df: pd.DataFrame, today: datetime,
-                  full_date_range: tuple = None):
-    """Render the Gantt.  Pass `full_date_range=(x_min, x_max)` to keep
-    column (month) widths the same whether filtered or not."""
+                  full_date_range: tuple = None,
+                  color_by: str = 'workstream'):
+    """Render the Gantt.  `color_by` selects which column drives the bar
+    color — 'workstream' (default) or 'round'.  Pass `full_date_range=(x_min,
+    x_max)` to keep column widths the same whether filtered or not."""
 
     # Use px.timeline — purpose-built Gantt that handles date-typed axes.
     # Pass `text='owner'` directly so each bar gets the right row's owner
@@ -186,13 +201,19 @@ def render_gantt(df: pd.DataFrame, today: datetime,
     import plotly.express as px
     df = df.copy()
     df['_owner_bold'] = df['owner'].apply(lambda o: f'<b>{o}</b>' if o else '')
+    if color_by == 'round':
+        color_col = 'round'
+        color_map = ROUND_COLORS
+    else:
+        color_col = 'workstream'
+        color_map = WORKSTREAM_COLORS
     fig = px.timeline(
         df,
         x_start='start',
         x_end='end',
         y='_label',
-        color='workstream',
-        color_discrete_map=WORKSTREAM_COLORS,
+        color=color_col,
+        color_discrete_map=color_map,
         text='_owner_bold',
         custom_data=['owner', 'notes', 'department'],
     )
@@ -310,8 +331,8 @@ except Exception as e:
     st.error(f'Could not load Long Zhu Budget sheet: {e}')
     st.stop()
 
-# Filter row: Stream pills + Owner multi-select
-col_stream, col_owner = st.columns([3, 2])
+# Filter row: Stream pills + Owner multi-select + Color-by radio
+col_stream, col_owner, col_colorby = st.columns([3, 2, 1.2])
 with col_stream:
     filter_choice = st.pills(
         'Filter by stream:',
@@ -332,18 +353,34 @@ with col_owner:
         label_visibility='visible',
     )
 
-# Legend pills (visual reference, not interactive)
+with col_colorby:
+    color_by_choice = st.radio(
+        'Color by:',
+        options=['Stream', 'Round'],
+        index=0,
+        label_visibility='visible',
+        horizontal=True,
+    )
+
+# Legend pills (visual reference, not interactive) — driven by color choice
+if color_by_choice == 'Round':
+    # Show only rounds actually present in the data, in a stable order
+    present = [r for r in ROUND_COLORS if r in set(df['round'].dropna())]
+    legend_items = [(r, ROUND_COLORS[r]) for r in present]
+else:
+    legend_items = [
+        ('Game Development', WORKSTREAM_COLORS['Game Development']),
+        ('Testing',          WORKSTREAM_COLORS['Testing']),
+        ('Marketing',        WORKSTREAM_COLORS['Marketing']),
+        ('Community',        WORKSTREAM_COLORS['Community']),
+        ('Sales & Ops',      WORKSTREAM_COLORS['Sales & Ops']),
+    ]
+
 legend_html = (
     '<div class="lz-legend" style="display:flex; gap:18px; align-items:center; '
     'font-size:13px; color:#444; margin-top:6px; margin-bottom:14px;">'
 )
-for label, color in [
-    ('Game Development', WORKSTREAM_COLORS['Game Development']),
-    ('Testing',          WORKSTREAM_COLORS['Testing']),
-    ('Marketing',        WORKSTREAM_COLORS['Marketing']),
-    ('Community',        WORKSTREAM_COLORS['Community']),
-    ('Sales & Ops',      WORKSTREAM_COLORS['Sales & Ops']),
-]:
+for label, color in legend_items:
     legend_html += (
         f'<span style="display:inline-flex;align-items:center;gap:6px;">'
         f'<span style="display:inline-block;width:10px;height:10px;border-radius:2px;'
@@ -378,6 +415,7 @@ full_x_max = (df['end'].max() + relativedelta(months=1)).replace(day=1)
 fig = render_gantt(
     df_view, today=datetime.now(),
     full_date_range=(full_x_min, full_x_max),
+    color_by='round' if color_by_choice == 'Round' else 'workstream',
 )
 st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
