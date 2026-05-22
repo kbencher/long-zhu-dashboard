@@ -261,7 +261,7 @@ def render_gantt(df: pd.DataFrame, today: datetime,
         showgrid=False,
         title_text='Activity',
         title_font=dict(size=13, color='#222', family='Inter'),
-        tickfont=dict(size=12, color='#222'),
+        tickfont=dict(size=12, color='#222', family='Inter'),
     )
 
     # Fixed row height — each visible row is ROW_HEIGHT_PX pixels tall.
