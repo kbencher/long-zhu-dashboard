@@ -175,10 +175,12 @@ def prepare_df(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+ROW_HEIGHT_PX = 50      # fixed height per task row
+
 def render_gantt(df: pd.DataFrame, today: datetime,
-                  all_labels: list = None, total_rows: int = None):
-    """Render the Gantt.  Pass `all_labels` to lock the y-axis to the full
-    set of categories (so filtered views still show every row position)."""
+                  full_date_range: tuple = None):
+    """Render the Gantt.  Pass `full_date_range=(x_min, x_max)` to keep
+    column (month) widths the same whether filtered or not."""
 
     # Use px.timeline — purpose-built Gantt that handles date-typed axes.
     # Pass `text='owner'` directly so each bar gets the right row's owner
@@ -217,10 +219,13 @@ def render_gantt(df: pd.DataFrame, today: datetime,
     )
 
     # X-axis: monthly labels centered between gridlines.
-    # Strategy: place tick LABELS at mid-month, draw GRIDLINES manually at
-    # month boundaries so the date hovers in the middle of its column.
-    x_min = df['start'].min().replace(day=1)
-    x_max = (df['end'].max() + relativedelta(months=1)).replace(day=1)
+    # Use the FULL date range (not the filtered view's) so column widths
+    # stay constant whether filtered or unfiltered.
+    if full_date_range:
+        x_min, x_max = full_date_range
+    else:
+        x_min = df['start'].min().replace(day=1)
+        x_max = (df['end'].max() + relativedelta(months=1)).replace(day=1)
     month_starts = pd.date_range(start=x_min, end=x_max, freq='MS')
 
     tickvals, ticktext = [], []
@@ -259,17 +264,16 @@ def render_gantt(df: pd.DataFrame, today: datetime,
         tickfont=dict(size=12, color='#222'),
     )
 
-    # Keep chart height constant even when filters reduce the visible rows.
-    # If `total_rows` is supplied, size the canvas to that — bars get a bit
-    # thicker when fewer rows are visible, but the chart doesn't shrink.
-    sizing_rows = total_rows if total_rows is not None else len(df)
+    # Fixed row height — each visible row is ROW_HEIGHT_PX pixels tall.
+    # Chart total height = rows × pixel/row + top/bottom margins.
+    n_rows = len(df)
     fig.update_layout(
-        height=max(440, 38 * sizing_rows + 90),
+        height=ROW_HEIGHT_PX * n_rows + 110,
         margin=dict(l=20, r=40, t=60, b=40),
         plot_bgcolor='white',
         paper_bgcolor='white',
         showlegend=False,
-        bargap=0.35,
+        bargap=0.30,
     )
     return fig
 
@@ -334,27 +338,29 @@ legend_html += (
 )
 st.markdown(legend_html, unsafe_allow_html=True)
 
-# Apply filters by HIDING non-matching bars (transparent) rather than
-# removing them.  This keeps every task row visible on the y-axis so the
-# chart canvas stays the same size whether 1 task or all are selected.
+# Apply filters — remove non-matching rows so each visible row keeps the
+# same fixed pixel height.  Column widths stay constant because we pass the
+# full unfiltered date range to render_gantt below.
 selected_ws = FILTER_TO_WS.get(filter_choice)
 df_view = df.copy()
-mask = pd.Series(True, index=df_view.index)
 if selected_ws:
-    mask &= (df_view['workstream'] == selected_ws)
+    df_view = df_view[df_view['workstream'] == selected_ws]
 if selected_owners:
-    mask &= df_view['owner'].isin(selected_owners)
+    df_view = df_view[df_view['owner'].isin(selected_owners)]
 
-if not mask.any():
+if df_view.empty:
     st.warning('No tasks matched the current filters.')
     st.stop()
 
-# For filtered-out rows: swap workstream to '_hidden' (transparent color)
-# and blank the owner label so nothing renders inside the bar.
-df_view.loc[~mask, 'workstream'] = '_hidden'
-df_view.loc[~mask, 'owner'] = ''
+# Lock the x-axis date range to the FULL dataset so month columns stay the
+# same pixel width whether filtered or unfiltered.
+full_x_min = df['start'].min().replace(day=1)
+full_x_max = (df['end'].max() + relativedelta(months=1)).replace(day=1)
 
-fig = render_gantt(df_view, today=datetime.now(), total_rows=len(df))
+fig = render_gantt(
+    df_view, today=datetime.now(),
+    full_date_range=(full_x_min, full_x_max),
+)
 st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
 st.caption(f'{len(df_view)} active task(s) shown · '
