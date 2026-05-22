@@ -156,7 +156,10 @@ def render_gantt(df: pd.DataFrame, today: datetime):
                      for i, lbl in enumerate(df['_label'])]
     df['_color'] = df['workstream'].map(WORKSTREAM_COLORS)
 
-    # Use px.timeline — purpose-built Gantt that handles date-typed axes
+    # Use px.timeline — purpose-built Gantt that handles date-typed axes.
+    # Pass `text='owner'` directly so each bar gets the right row's owner
+    # (px.timeline groups bars by color into traces; setting text via
+    # update_traces() can mis-align across trace groups).
     import plotly.express as px
     fig = px.timeline(
         df,
@@ -165,12 +168,12 @@ def render_gantt(df: pd.DataFrame, today: datetime):
         y='_label',
         color='workstream',
         color_discrete_map=WORKSTREAM_COLORS,
+        text='owner',
         custom_data=['owner', 'notes', 'department'],
     )
 
-    # Owner label overlaid inside each bar
+    # Style the owner label overlaid inside each bar
     fig.update_traces(
-        text=df['owner'],
         textposition='inside',
         insidetextanchor='middle',
         textfont=dict(color='white', size=11, family='Inter'),
