@@ -158,7 +158,7 @@ def _task_label(row) -> str:
 
 
 # ── Build Plotly Gantt ──────────────────────────────────────────────────────
-def render_gantt(df: pd.DataFrame, today: datetime):
+def render_gantt(df: pd.DataFrame, today: datetime, total_rows: int = None):
     # Order: by workstream (in mockup order), then by start date
     ws_order = ['Game Development', 'Testing', 'Marketing', 'Community', 'Sales & Ops']
     df['_ws_rank'] = df['workstream'].map({w: i for i, w in enumerate(ws_order)})
@@ -251,8 +251,12 @@ def render_gantt(df: pd.DataFrame, today: datetime):
         tickfont=dict(size=12, color='#222'),
     )
 
+    # Keep chart height constant even when filters reduce the visible rows.
+    # If `total_rows` is supplied, size the canvas to that — bars get a bit
+    # thicker when fewer rows are visible, but the chart doesn't shrink.
+    sizing_rows = total_rows if total_rows is not None else len(df)
     fig.update_layout(
-        height=max(440, 38 * len(df) + 90),
+        height=max(440, 38 * sizing_rows + 90),
         margin=dict(l=20, r=40, t=60, b=40),
         plot_bgcolor='white',
         paper_bgcolor='white',
@@ -334,7 +338,7 @@ if df_view.empty:
     st.warning('No tasks matched the current filters.')
     st.stop()
 
-fig = render_gantt(df_view, today=datetime.now())
+fig = render_gantt(df_view, today=datetime.now(), total_rows=len(df))
 st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
 st.caption(f'{len(df_view)} active task(s) shown · '
