@@ -34,7 +34,7 @@ FILTER_TO_WS = {
     'Testing':     'Testing',
     'Marketing':   'Marketing',
     'Community':   'Community',
-    'Sales & ops': 'Sales & Ops',
+    'Sales & Ops': 'Sales & Ops',
 }
 
 
@@ -289,7 +289,7 @@ for label, color in [
     ('Testing',          WORKSTREAM_COLORS['Testing']),
     ('Marketing',        WORKSTREAM_COLORS['Marketing']),
     ('Community',        WORKSTREAM_COLORS['Community']),
-    ('Sales & ops',      WORKSTREAM_COLORS['Sales & Ops']),
+    ('Sales & Ops',      WORKSTREAM_COLORS['Sales & Ops']),
 ]:
     legend_html += (
         f'<span style="display:inline-flex;align-items:center;gap:6px;">'
