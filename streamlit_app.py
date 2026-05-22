@@ -134,12 +134,27 @@ def _bucket_workstream(ws_group: str, dept: str) -> str:
     return 'Sales & Ops'
 
 
+def _wrap_label(text: str, width: int = 38) -> str:
+    """Insert <br> tags at word boundaries so a long label wraps."""
+    words = (text or '').split()
+    if not words:
+        return ''
+    lines, current = [], ''
+    for w in words:
+        if current and len(current) + 1 + len(w) > width:
+            lines.append(current)
+            current = w
+        else:
+            current = f'{current} {w}' if current else w
+    if current:
+        lines.append(current)
+    return '<br>'.join(lines)
+
+
 def _task_label(row) -> str:
-    """2-line label: notes (bolded) over owner."""
+    """Bold, word-wrapped task name (owner now shown only on the bar)."""
     primary = row['notes'] if row['notes'] else row['department']
-    if len(primary) > 38:
-        primary = primary[:36] + '…'
-    return f"<b>{primary}</b><br><span style='color:#888;font-size:11px'>{row['owner']}</span>"
+    return f"<b>{_wrap_label(primary)}</b>"
 
 
 # ── Build Plotly Gantt ──────────────────────────────────────────────────────
@@ -235,12 +250,12 @@ def render_gantt(df: pd.DataFrame, today: datetime):
     )
 
     fig.update_layout(
-        height=max(420, 32 * len(df) + 80),
+        height=max(440, 38 * len(df) + 90),
         margin=dict(l=20, r=40, t=60, b=40),
         plot_bgcolor='white',
         paper_bgcolor='white',
         showlegend=False,
-        bargap=0.30,
+        bargap=0.35,
     )
     return fig
 
