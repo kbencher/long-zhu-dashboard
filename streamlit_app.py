@@ -283,6 +283,24 @@ st.markdown(
     "<h2 style='margin-bottom:0;'>Long Zhu — Workstream Timeline</h2>",
     unsafe_allow_html=True,
 )
+
+# Match font family of filter pills + legend to the chart's axis labels
+# (Plotly's default font stack).
+st.markdown(
+    """
+    <style>
+    div[data-testid="stPills"] button,
+    div[data-testid="stMultiSelect"] *,
+    .stPills label,
+    .stMultiSelect label,
+    .lz-legend {
+        font-family: "Open Sans", verdana, arial, sans-serif !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 st.write('')
 
 # Load tasks early so the owner filter knows what options to show
@@ -316,7 +334,7 @@ with col_owner:
 
 # Legend pills (visual reference, not interactive)
 legend_html = (
-    '<div style="display:flex; gap:18px; align-items:center; '
+    '<div class="lz-legend" style="display:flex; gap:18px; align-items:center; '
     'font-size:13px; color:#444; margin-top:6px; margin-bottom:14px;">'
 )
 for label, color in [
