@@ -31,7 +31,7 @@ WORKSTREAM_COLORS = {
 }
 FILTER_TO_WS = {
     'All':         None,
-    'Game Dev':    'Game Development',
+    'Game Development': 'Game Development',
     'Testing':     'Testing',
     'Marketing':   'Marketing',
     'Community':   'Community',
