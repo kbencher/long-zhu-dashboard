@@ -160,13 +160,10 @@ def _task_label(row) -> str:
 
 # ── Build Plotly Gantt ──────────────────────────────────────────────────────
 def prepare_df(df: pd.DataFrame) -> pd.DataFrame:
-    """Sort by workstream order + start date, and build unique y-axis labels.
-    Run this once on the *full* dataset before any filtering so that label
-    identities stay stable across the unfiltered / filtered views."""
-    ws_order = ['Game Development', 'Testing', 'Marketing', 'Community', 'Sales & Ops']
-    df = df.copy()
-    df['_ws_rank'] = df['workstream'].map({w: i for i, w in enumerate(ws_order)})
-    df = df.sort_values(['_ws_rank', 'start']).reset_index(drop=True)
+    """Preserve the order tasks appear in the Google Sheet and build unique
+    y-axis labels.  Run this once on the *full* dataset before any filtering
+    so label identities stay stable across the unfiltered / filtered views."""
+    df = df.copy().reset_index(drop=True)
     df['_label'] = df.apply(_task_label, axis=1)
     # Make labels unique (Plotly's category axis dedupes identical labels).
     df['_label'] = [f"{lbl}<span style='display:none'>{i}</span>"
