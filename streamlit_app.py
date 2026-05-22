@@ -324,6 +324,13 @@ st.markdown(
 
 st.write('')
 
+# Refresh button — clears the 5-min cache and re-pulls from the sheet.
+col_title, col_refresh = st.columns([6, 1])
+with col_refresh:
+    if st.button('🔄 Refresh', help='Re-read the Google Sheet now',
+                  use_container_width=True):
+        load_tasks.clear()
+
 # Load tasks early so the owner filter knows what options to show
 try:
     df = prepare_df(load_tasks())
