@@ -232,7 +232,7 @@ def render_gantt(df: pd.DataFrame, today: datetime,
     for i in range(len(month_starts) - 1):
         mid = month_starts[i] + (month_starts[i + 1] - month_starts[i]) / 2
         tickvals.append(mid)
-        ticktext.append(month_starts[i].strftime('%b %y'))
+        ticktext.append(f"<b>{month_starts[i].strftime('%b %y')}</b>")
 
     fig.update_xaxes(
         type='date',
@@ -259,7 +259,7 @@ def render_gantt(df: pd.DataFrame, today: datetime,
     fig.update_yaxes(
         autorange='reversed',
         showgrid=False,
-        title_text='Activity',
+        title_text='<b>Activity</b>',
         title_font=dict(size=13, color='#222'),
         tickfont=dict(size=12, color='#222'),
     )
