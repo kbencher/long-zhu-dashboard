@@ -33,8 +33,8 @@ WORKSTREAM_COLORS = {
 # Color palette when "Color by: Round" is selected.  Extend as new rounds
 # (Series A, Series B…) appear in the sheet.
 ROUND_COLORS = {
-    'Pre-Seed': '#D4843F',   # warm amber
-    'Launch':   '#1A8FBF',   # teal blue
+    'Pre-Seed': '#C9A227',   # gold
+    'Launch':   '#86878B',   # platinum (cool grey-silver)
     'Seed':     '#5B47B0',   # purple
     'Series A': '#2D6A3F',   # green
     'Series B': '#A03D2D',   # red
