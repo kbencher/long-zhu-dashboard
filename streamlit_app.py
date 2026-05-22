@@ -269,15 +269,34 @@ st.markdown(
 )
 st.write('')
 
-# Filter pills row
-filter_choice = st.pills(
-    'Filter:',
-    list(FILTER_TO_WS.keys()),
-    default='All',
-    label_visibility='visible',
-)
-if filter_choice is None:
-    filter_choice = 'All'
+# Load tasks early so the owner filter knows what options to show
+try:
+    df = load_tasks()
+except Exception as e:
+    st.error(f'Could not load Long Zhu Budget sheet: {e}')
+    st.stop()
+
+# Filter row: Stream pills + Owner multi-select
+col_stream, col_owner = st.columns([3, 2])
+with col_stream:
+    filter_choice = st.pills(
+        'Filter by stream:',
+        list(FILTER_TO_WS.keys()),
+        default='All',
+        label_visibility='visible',
+    )
+    if filter_choice is None:
+        filter_choice = 'All'
+
+with col_owner:
+    all_owners = sorted({o for o in df['owner'].dropna().unique() if o})
+    selected_owners = st.multiselect(
+        'Filter by owner:',
+        options=all_owners,
+        default=[],
+        placeholder='All owners',
+        label_visibility='visible',
+    )
 
 # Legend pills (visual reference, not interactive)
 legend_html = (
@@ -303,21 +322,16 @@ legend_html += (
 )
 st.markdown(legend_html, unsafe_allow_html=True)
 
-try:
-    df = load_tasks()
-except Exception as e:
-    st.error(f'Could not load Long Zhu Budget sheet: {e}')
-    st.stop()
-
-# Apply filter
+# Apply filters
 selected_ws = FILTER_TO_WS.get(filter_choice)
+df_view = df.copy()
 if selected_ws:
-    df_view = df[df['workstream'] == selected_ws].copy()
-else:
-    df_view = df.copy()
+    df_view = df_view[df_view['workstream'] == selected_ws]
+if selected_owners:
+    df_view = df_view[df_view['owner'].isin(selected_owners)]
 
 if df_view.empty:
-    st.warning(f'No tasks matched the "{filter_choice}" filter.')
+    st.warning('No tasks matched the current filters.')
     st.stop()
 
 fig = render_gantt(df_view, today=datetime.now())
