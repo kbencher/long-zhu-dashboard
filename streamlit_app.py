@@ -331,17 +331,24 @@ except Exception as e:
     st.error(f'Could not load Long Zhu Budget sheet: {e}')
     st.stop()
 
-# Filter row: Stream pills + Owner multi-select + Color-by radio
-col_stream, col_owner, col_colorby = st.columns([3, 2, 1.2])
+# Filter row: Workstream pills + Owner multi-select (Color-by below)
+col_stream, col_owner = st.columns([3, 2])
 with col_stream:
     filter_choice = st.pills(
-        'Filter by stream:',
+        'Filter by Workstream:',
         list(FILTER_TO_WS.keys()),
         default='All',
         label_visibility='visible',
     )
     if filter_choice is None:
         filter_choice = 'All'
+    color_by_choice = st.radio(
+        'Color by:',
+        options=['Stream', 'Round'],
+        index=0,
+        label_visibility='visible',
+        horizontal=True,
+    )
 
 with col_owner:
     all_owners = sorted({o for o in df['owner'].dropna().unique() if o})
@@ -351,15 +358,6 @@ with col_owner:
         default=[],
         placeholder='All owners',
         label_visibility='visible',
-    )
-
-with col_colorby:
-    color_by_choice = st.radio(
-        'Color by:',
-        options=['Stream', 'Round'],
-        index=0,
-        label_visibility='visible',
-        horizontal=True,
     )
 
 # Legend pills (visual reference, not interactive) — driven by color choice
