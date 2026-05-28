@@ -86,7 +86,7 @@ def load_tasks() -> pd.DataFrame:
     ws = next((w for w in sh.worksheets() if w.id == TASKS_TAB_GID), None)
     if ws is None:
         raise RuntimeError(f'Tasks tab (gid {TASKS_TAB_GID}) not found.')
-    rows = ws.get('A1:G100', value_render_option='FORMATTED_VALUE')
+    rows = ws.get('A1:H100', value_render_option='FORMATTED_VALUE')
 
     def _parse_date(s):
         if not s:
@@ -98,6 +98,12 @@ def load_tasks() -> pd.DataFrame:
                 pass
         return None
 
+    def _money(s):
+        if not s: return 0.0
+        s = str(s).replace('$','').replace(',','').strip()
+        try: return float(s)
+        except (ValueError, TypeError): return 0.0
+
     out = []
     for r in rows:
         if not r or len(r) < 7:
@@ -108,6 +114,7 @@ def load_tasks() -> pd.DataFrame:
         round_     = str(r[4] or '').strip() if len(r) > 4 else ''
         start      = _parse_date(r[5]) if len(r) > 5 else None
         months_raw = str(r[6] or '').strip() if len(r) > 6 else ''
+        total_cost = _money(r[7]) if len(r) > 7 else 0.0
 
         if not start or not months_raw:
             continue
@@ -116,6 +123,7 @@ def load_tasks() -> pd.DataFrame:
         except (ValueError, AttributeError):
             continue
         end = start + relativedelta(months=n_months)
+        monthly_cost = total_cost / n_months if n_months else 0.0
 
         bucket = _bucket_workstream(stream, '')
         out.append({
@@ -127,6 +135,9 @@ def load_tasks() -> pd.DataFrame:
             'notes':      notes,
             'start':      start,
             'end':        end,
+            'months':     n_months,
+            'total_cost': total_cost,
+            'monthly_cost': monthly_cost,
         })
     return pd.DataFrame(out)
 
@@ -186,6 +197,94 @@ def prepare_df(df: pd.DataFrame) -> pd.DataFrame:
 
 
 ROW_HEIGHT_PX = 50      # fixed height per task row
+
+
+def _cuboid(x0, x1, y0, y1, z0, z1, color, name, hover):
+    """Return a Plotly Mesh3d cuboid (used in the 3D cost timeline)."""
+    # 8 vertices of the box
+    xs = [x0, x1, x1, x0, x0, x1, x1, x0]
+    ys = [y0, y0, y1, y1, y0, y0, y1, y1]
+    zs = [z0, z0, z0, z0, z1, z1, z1, z1]
+    # 12 triangles (i, j, k) covering all 6 faces (2 tris each)
+    i = [0, 0,  4, 4,  0, 0,  3, 3,  0, 0,  1, 1]
+    j = [1, 2,  5, 6,  1, 5,  2, 6,  3, 7,  2, 6]
+    k = [2, 3,  6, 7,  5, 4,  6, 7,  7, 4,  6, 5]
+    return go.Mesh3d(
+        x=xs, y=ys, z=zs, i=i, j=j, k=k,
+        color=color, opacity=1.0, flatshading=True,
+        name=name, hovertext=hover, hoverinfo='text',
+        showscale=False,
+    )
+
+
+def render_gantt_3d(df: pd.DataFrame, color_by: str = 'workstream'):
+    """3D version of the Gantt: each task is a rectangular column extruded
+    along the time axis (X), the task row (Y), with HEIGHT (Z) = monthly cost.
+    """
+    if df.empty:
+        return None
+    df = df.copy().reset_index(drop=True)
+    color_col, color_map = (
+        ('round', ROUND_COLORS) if color_by == 'round'
+        else ('workstream', WORKSTREAM_COLORS)
+    )
+
+    # X = days since the earliest start (numeric)
+    x_origin = df['start'].min().replace(day=1)
+    x_end_max = (df['end'].max() + relativedelta(months=1)).replace(day=1)
+
+    def _to_days(d):
+        return (d - x_origin).days
+
+    fig = go.Figure()
+    for idx, row in df.iterrows():
+        x0 = _to_days(row['start'])
+        x1 = _to_days(row['end'])
+        y0 = idx - 0.4
+        y1 = idx + 0.4
+        z0 = 0
+        z1 = float(row['monthly_cost']) or 0.0
+        color = color_map.get(row[color_col], '#999')
+        hover = (f"<b>{row['notes'] or row['department']}</b><br>"
+                 f"Owner: {row['owner']}<br>"
+                 f"{row['start'].strftime('%b %Y')} → {row['end'].strftime('%b %Y')} "
+                 f"({row['months']} months)<br>"
+                 f"Total: ${row['total_cost']:,.0f}<br>"
+                 f"Monthly: ${z1:,.0f}")
+        fig.add_trace(_cuboid(x0, x1, y0, y1, z0, z1, color,
+                              row['notes'] or row['department'], hover))
+
+    # X-axis: monthly tick labels
+    month_starts = pd.date_range(start=x_origin, end=x_end_max, freq='MS')
+    x_tickvals = [(m - x_origin).days for m in month_starts]
+    x_ticktext = [m.strftime('%b %y') for m in month_starts]
+
+    # Y-axis: task labels in order
+    y_tickvals = list(range(len(df)))
+    y_ticktext = [(r['notes'] or r['department'])[:50] for _, r in df.iterrows()]
+
+    fig.update_layout(
+        scene=dict(
+            xaxis=dict(title='Time', tickmode='array',
+                       tickvals=x_tickvals, ticktext=x_ticktext,
+                       tickfont=dict(size=10), showbackground=False),
+            yaxis=dict(title='Activity', tickmode='array',
+                       tickvals=y_tickvals, ticktext=y_ticktext,
+                       autorange='reversed',
+                       tickfont=dict(size=10), showbackground=False),
+            zaxis=dict(title='Monthly Cost ($)',
+                       tickprefix='$', separatethousands=True,
+                       tickfont=dict(size=10), showbackground=True,
+                       backgroundcolor='#f7f7f7'),
+            aspectratio=dict(x=3, y=2, z=1),
+            camera=dict(eye=dict(x=1.8, y=-1.8, z=0.9)),
+        ),
+        height=max(600, ROW_HEIGHT_PX * len(df) + 200),
+        margin=dict(l=0, r=0, t=20, b=0),
+        showlegend=False,
+        paper_bgcolor='white',
+    )
+    return fig
 
 def render_gantt(df: pd.DataFrame, today: datetime,
                   full_date_range: tuple = None,
@@ -417,12 +516,24 @@ if df_view.empty:
 full_x_min = df['start'].min().replace(day=1)
 full_x_max = (df['end'].max() + relativedelta(months=1)).replace(day=1)
 
-fig = render_gantt(
-    df_view, today=datetime.now(),
-    full_date_range=(full_x_min, full_x_max),
-    color_by='round' if color_by_choice == 'Round' else 'workstream',
-)
-st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+tab_2d, tab_3d = st.tabs(['📅 Timeline', '📊 Cost Timeline (3D)'])
+
+with tab_2d:
+    fig = render_gantt(
+        df_view, today=datetime.now(),
+        full_date_range=(full_x_min, full_x_max),
+        color_by='round' if color_by_choice == 'Round' else 'workstream',
+    )
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+
+with tab_3d:
+    st.caption('Bar height = **monthly cost** (Total ÷ duration). Drag to rotate, scroll to zoom.')
+    fig3d = render_gantt_3d(
+        df_view,
+        color_by='round' if color_by_choice == 'Round' else 'workstream',
+    )
+    if fig3d is not None:
+        st.plotly_chart(fig3d, use_container_width=True, config={'displayModeBar': True})
 
 st.caption(f'{len(df_view)} active task(s) shown · '
             f'Source: Long Zhu Budget Google Sheet (auto-refreshes every 5 min)')
