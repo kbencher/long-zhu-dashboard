@@ -294,12 +294,13 @@ def render_gantt(df: pd.DataFrame, today: datetime,
     x_max)` to keep column widths the same whether filtered or not."""
 
     # Use px.timeline — purpose-built Gantt that handles date-typed axes.
-    # Pass `text='owner'` directly so each bar gets the right row's owner
-    # (px.timeline groups bars by color into traces; setting text via
-    # update_traces() can mis-align across trace groups).
+    # Bar label = total dollar amount (column H from the sheet).
     import plotly.express as px
     df = df.copy()
-    df['_owner_bold'] = df['owner'].apply(lambda o: f'<b>{o}</b>' if o else '')
+    def _fmt_money(v):
+        if not v: return ''
+        return f'<b>${v:,.0f}</b>'
+    df['_cost_label'] = df.get('total_cost', pd.Series([0]*len(df))).apply(_fmt_money)
     if color_by == 'round':
         color_col = 'round'
         color_map = ROUND_COLORS
@@ -313,11 +314,11 @@ def render_gantt(df: pd.DataFrame, today: datetime,
         y='_label',
         color=color_col,
         color_discrete_map=color_map,
-        text='_owner_bold',
-        custom_data=['owner', 'notes', 'department'],
+        text='_cost_label',
+        custom_data=['owner', 'notes', 'department', 'total_cost', 'monthly_cost'],
     )
 
-    # Style the owner label overlaid inside each bar, plus rounded corners.
+    # Style the total-cost label overlaid inside each bar, plus rounded corners.
     fig.update_traces(
         textposition='inside',
         insidetextanchor='middle',
@@ -326,7 +327,9 @@ def render_gantt(df: pd.DataFrame, today: datetime,
         hovertemplate=(
             '<b>%{customdata[1]}</b><br>'
             'Owner: %{customdata[0]}<br>'
-            '%{base|%b %Y} → %{x|%b %Y}<extra></extra>'
+            '%{base|%b %Y} → %{x|%b %Y}<br>'
+            'Total: $%{customdata[3]:,.0f}<br>'
+            'Monthly: $%{customdata[4]:,.0f}<extra></extra>'
         ),
     )
 
@@ -353,6 +356,32 @@ def render_gantt(df: pd.DataFrame, today: datetime,
         mid = month_starts[i] + (month_starts[i + 1] - month_starts[i]) / 2
         tickvals.append(mid)
         ticktext.append(f"<b>{month_starts[i].strftime('%b %y')}</b>")
+
+    # Monthly burn row: sum of monthly_cost across all tasks active in
+    # each month (shown above the calendar header).
+    monthly_burn_by_month = []
+    for i in range(len(month_starts) - 1):
+        m0 = month_starts[i]
+        m1 = month_starts[i + 1]
+        burn = 0.0
+        for _, r in df.iterrows():
+            # A task is active during this month if its window overlaps it
+            if r['start'] < m1 and r['end'] > m0:
+                burn += float(r.get('monthly_cost') or 0)
+        monthly_burn_by_month.append(burn)
+    burn_annotations = []
+    for i, mid in enumerate(tickvals):
+        amt = monthly_burn_by_month[i]
+        burn_annotations.append(dict(
+            x=mid, xref='x',
+            y=1.0, yref='paper',
+            yshift=42,                       # above the month-name labels
+            text=(f'<b>${amt/1000:,.0f}K</b>' if amt >= 1000
+                  else (f'<b>${amt:,.0f}</b>' if amt else '')),
+            showarrow=False,
+            font=dict(size=11, color='#222'),
+            xanchor='center', yanchor='middle',
+        ))
 
     fig.update_xaxes(
         type='date',
@@ -385,15 +414,24 @@ def render_gantt(df: pd.DataFrame, today: datetime,
     )
 
     # Fixed row height — each visible row is ROW_HEIGHT_PX pixels tall.
-    # Chart total height = rows × pixel/row + top/bottom margins.
+    # Chart total height = rows × pixel/row + top/bottom margins (extra
+    # top room for the monthly-burn header row).
     n_rows = len(df)
     fig.update_layout(
-        height=ROW_HEIGHT_PX * n_rows + 110,
-        margin=dict(l=20, r=40, t=60, b=40),
+        height=ROW_HEIGHT_PX * n_rows + 150,
+        margin=dict(l=20, r=40, t=100, b=40),
         plot_bgcolor='white',
         paper_bgcolor='white',
         showlegend=False,
         bargap=0.30,
+        annotations=burn_annotations + [dict(
+            x=0, xref='paper', y=1.0, yref='paper', yshift=42,
+            text='<b>Monthly Burn:</b>',
+            showarrow=False,
+            font=dict(size=11, color='#555'),
+            xanchor='right', yanchor='middle',
+            xshift=-10,
+        )],
     )
     return fig
 
@@ -516,24 +554,12 @@ if df_view.empty:
 full_x_min = df['start'].min().replace(day=1)
 full_x_max = (df['end'].max() + relativedelta(months=1)).replace(day=1)
 
-tab_2d, tab_3d = st.tabs(['📅 Timeline', '📊 Cost Timeline (3D)'])
-
-with tab_2d:
-    fig = render_gantt(
-        df_view, today=datetime.now(),
-        full_date_range=(full_x_min, full_x_max),
-        color_by='round' if color_by_choice == 'Round' else 'workstream',
-    )
-    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-
-with tab_3d:
-    st.caption('Bar height = **monthly cost** (Total ÷ duration). Drag to rotate, scroll to zoom.')
-    fig3d = render_gantt_3d(
-        df_view,
-        color_by='round' if color_by_choice == 'Round' else 'workstream',
-    )
-    if fig3d is not None:
-        st.plotly_chart(fig3d, use_container_width=True, config={'displayModeBar': True})
+fig = render_gantt(
+    df_view, today=datetime.now(),
+    full_date_range=(full_x_min, full_x_max),
+    color_by='round' if color_by_choice == 'Round' else 'workstream',
+)
+st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
 st.caption(f'{len(df_view)} active task(s) shown · '
             f'Source: Long Zhu Budget Google Sheet (auto-refreshes every 5 min)')
