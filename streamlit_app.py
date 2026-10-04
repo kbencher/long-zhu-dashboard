@@ -21,13 +21,15 @@ st.set_page_config(
 
 
 # ── Workstream colours (match mockup) ───────────────────────────────────────
+# Keyed by the sheet's "Chart" column (C).
 WORKSTREAM_COLORS = {
     'Game Development': '#A03D2D',   # red
-    'Marketing':        '#1F5A8C',
-    'Community':        '#5B47B0',
-    'Sales & Ops':      '#6E7479',
+    'Go-To-Market':     '#1F5A8C',   # blue
     '_hidden':          'rgba(0,0,0,0)',   # filtered-out rows
 }
+# Rounds whose bars are cross-hatched (Seed | Launch, Seed | Pre-Order…);
+# everything else (Pre-Seed) is solid.
+HATCHED_ROUND_PREFIX = 'seed'
 
 # Color palette when "Color by: Round" is selected.  Extend as new rounds
 # (Series A, Series B…) appear in the sheet.
@@ -39,11 +41,9 @@ ROUND_COLORS = {
     'Series B': '#A03D2D',   # red
 }
 FILTER_TO_WS = {
-    'All':         None,
+    'All':              None,
     'Game Development': 'Game Development',
-    'Marketing':   'Marketing',
-    'Community':   'Community',
-    'Sales & Ops': 'Sales & Ops',
+    'Go-To-Market':     'Go-To-Market',
 }
 
 
@@ -58,17 +58,14 @@ TASKS_TAB_GID = 1740834373   # 'Data Chartv2' — Gantt-input layout
 def load_tasks() -> pd.DataFrame:
     """Pull tasks from the Gantt-input tab of the Long Zhu Budget sheet.
 
-    Layout (row 5 is the header):
-        A  (blank)
-        B  Stream         — workstream (Game Development, Marketing,
-                            Community, Sales & Ops)
-        C  Owner
-        D  Notes          — task description shown on the row label
-        E  Round          — Pre-Seed, Launch, Series A, ...
-        F  Start Date     — mm/dd/yy
-        G  Months         — integer duration
-    Section header rows (e.g. 'GAME DEVELOPMENT' in CAPS) and rows missing
-    Start Date or Months are skipped.
+    Columns are located by the header row (the row containing 'Stream' and
+    'Start Date'), so inserting/reordering columns in the sheet is safe:
+        Stream      — sheet section (Game Development, Marketing, Community…)
+        Chart       — chart grouping / legend (Game Development, Go-To-Market)
+        Owner, Notes, Round, Start Date (mm/dd/yy), Months, Cost
+    Section header rows and rows missing Start Date or Months are skipped.
+    Rows are grouped by Chart (in order of first appearance), keeping sheet
+    order within each group.
     """
     import gspread
     from google.oauth2.service_account import Credentials
@@ -84,7 +81,17 @@ def load_tasks() -> pd.DataFrame:
     ws = next((w for w in sh.worksheets() if w.id == TASKS_TAB_GID), None)
     if ws is None:
         raise RuntimeError(f'Tasks tab (gid {TASKS_TAB_GID}) not found.')
-    rows = ws.get('A1:H100', value_render_option='FORMATTED_VALUE')
+    rows = ws.get('A1:Z200', value_render_option='FORMATTED_VALUE')
+
+    hdr_i = next((i for i, r in enumerate(rows)
+                  if 'Stream' in [str(c).strip() for c in r]
+                  and 'Start Date' in [str(c).strip() for c in r]), None)
+    if hdr_i is None:
+        raise RuntimeError("Header row with 'Stream' and 'Start Date' not found.")
+    col = {str(c).strip(): j for j, c in enumerate(rows[hdr_i]) if str(c).strip()}
+    for need in ('Stream', 'Owner', 'Notes', 'Round', 'Start Date', 'Months', 'Cost'):
+        if need not in col:
+            raise RuntimeError(f"Column '{need}' not found in header row.")
 
     def _parse_date(s):
         if not s:
@@ -102,17 +109,20 @@ def load_tasks() -> pd.DataFrame:
         try: return float(s)
         except (ValueError, TypeError): return 0.0
 
+    def _cell(r, name):
+        j = col.get(name)
+        return str(r[j] or '').strip() if j is not None and j < len(r) else ''
+
     out = []
-    for r in rows:
-        if not r or len(r) < 7:
-            continue
-        stream     = str(r[1] or '').strip() if len(r) > 1 else ''
-        owner      = str(r[2] or '').strip() if len(r) > 2 else ''
-        notes      = str(r[3] or '').strip() if len(r) > 3 else ''
-        round_     = str(r[4] or '').strip() if len(r) > 4 else ''
-        start      = _parse_date(r[5]) if len(r) > 5 else None
-        months_raw = str(r[6] or '').strip() if len(r) > 6 else ''
-        total_cost = _money(r[7]) if len(r) > 7 else 0.0
+    for r in rows[hdr_i + 1:]:
+        stream     = _cell(r, 'Stream')
+        chart      = _cell(r, 'Chart')
+        owner      = _cell(r, 'Owner')
+        notes      = _cell(r, 'Notes')
+        round_     = _cell(r, 'Round')
+        start      = _parse_date(_cell(r, 'Start Date'))
+        months_raw = _cell(r, 'Months')
+        total_cost = _money(_cell(r, 'Cost'))
 
         if not start or not months_raw:
             continue
@@ -123,9 +133,9 @@ def load_tasks() -> pd.DataFrame:
         end = start + relativedelta(months=n_months)
         monthly_cost = total_cost / n_months if n_months else 0.0
 
-        bucket = _bucket_workstream(stream, '')
         out.append({
-            'workstream': bucket,
+            'workstream': chart or stream,
+            'hatched':    round_.lower().startswith(HATCHED_ROUND_PREFIX),
             # 'Seed | Launch' → color by the first round listed
             'round':      round_.split('|')[0].strip() or 'Unspecified',
             'sub':        stream,
@@ -138,22 +148,14 @@ def load_tasks() -> pd.DataFrame:
             'total_cost': total_cost,
             'monthly_cost': monthly_cost,
         })
-    return pd.DataFrame(out)
-
-
-def _bucket_workstream(ws_group: str, dept: str) -> str:
-    g = (ws_group or '').lower()
-    d = (dept or '').lower()
-    if 'game' in g or 'identity' in g or 'illustration' in g or 'design' in g \
-            or 'story' in g or 'tournament' in g or 'testing' in g:
-        return 'Game Development'
-    if 'marketing' in g:
-        return 'Marketing'
-    if 'community' in g or 'community' in d:
-        return 'Community'
-    if 'sales' in g or 'distribution' in g or 'admin' in g or 'monthly' in g:
-        return 'Sales & Ops'
-    return 'Sales & Ops'
+    df = pd.DataFrame(out)
+    if df.empty:
+        return df
+    group_order = {g: i for i, g in enumerate(dict.fromkeys(df['workstream']))}
+    return (df.assign(_g=df['workstream'].map(group_order))
+              .sort_values('_g', kind='stable')
+              .drop(columns='_g')
+              .reset_index(drop=True))
 
 
 def _wrap_label(text: str, width: int = 38) -> str:
@@ -312,6 +314,8 @@ def render_gantt(df: pd.DataFrame, today: datetime,
         color=color_col,
         color_discrete_map=color_map,
         text='_cost_label',
+        pattern_shape='hatched',
+        pattern_shape_map={False: '', True: 'x'},
         custom_data=['owner', 'notes', 'department', 'total_cost', 'monthly_cost'],
     )
 
@@ -329,6 +333,12 @@ def render_gantt(df: pd.DataFrame, today: datetime,
             'Monthly: $%{customdata[4]:,.0f}<extra></extra>'
         ),
     )
+
+    # Seed-funded bars: same color, overlaid with a light cross-hatch.
+    for tr in fig.data:
+        if tr.marker.pattern.shape == 'x':
+            tr.marker.pattern.update(fillmode='overlay', fgcolor='white',
+                                     fgopacity=0.55, size=8, solidity=0.25)
 
     # (y-axis ordering set later via categoryarray or autorange)
 
@@ -534,12 +544,8 @@ if color_by_choice == 'Round':
     present = [r for r in ROUND_COLORS if r in set(df['round'].dropna())]
     legend_items = [(r, ROUND_COLORS[r]) for r in present]
 else:
-    legend_items = [
-        ('Game Development', WORKSTREAM_COLORS['Game Development']),
-        ('Marketing',        WORKSTREAM_COLORS['Marketing']),
-        ('Community',        WORKSTREAM_COLORS['Community']),
-        ('Sales & Ops',      WORKSTREAM_COLORS['Sales & Ops']),
-    ]
+    legend_items = [(g, WORKSTREAM_COLORS.get(g, '#6E7479'))
+                    for g in dict.fromkeys(df['workstream'])]
 
 legend_html = (
     '<div class="lz-legend" style="display:flex; gap:18px; align-items:center; '
@@ -551,6 +557,18 @@ for label, color in legend_items:
         f'<span style="display:inline-block;width:10px;height:10px;border-radius:2px;'
         f'background:{color};"></span>{label}</span>'
     )
+_hatch = ('repeating-linear-gradient(45deg,rgba(255,255,255,.55) 0 1px,transparent 1px 5px),'
+          'repeating-linear-gradient(-45deg,rgba(255,255,255,.55) 0 1px,transparent 1px 5px),#777')
+legend_html += (
+    '<span style="color:#bbb;">|</span>'
+    '<span style="display:inline-flex;align-items:center;gap:6px;">'
+    '<span style="display:inline-block;width:18px;height:10px;border-radius:2px;background:#777;"></span>'
+    'Pre-Seed</span>'
+    '<span style="display:inline-flex;align-items:center;gap:6px;">'
+    f'<span style="display:inline-block;width:18px;height:10px;border-radius:2px;background:{_hatch};"></span>'
+    'Seed</span>'
+    '<span style="color:#bbb;">|</span>'
+)
 legend_html += (
     '<span style="display:inline-flex;align-items:center;gap:6px;">'
     '<span style="display:inline-block;width:2px;height:14px;background:#e74c3c;"></span>'
