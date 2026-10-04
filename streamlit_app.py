@@ -31,8 +31,13 @@ WORKSTREAM_COLORS = {
 # everything else (Pre-Seed) is solid.
 HATCHED_ROUND_PREFIX = 'seed'
 
-# Month highlighted on the chart with a "Launch" label.
-LAUNCH_MONTH = datetime(2027, 8, 1)
+# Highlighted months: shaded column + label in the header row above
+# Monthly Burn.  Multi-word labels stack one word per line.
+MILESTONES = [
+    (datetime(2027, 3, 1), 'Demo Deck'),
+    (datetime(2027, 5, 1), 'Pre-Production Deck'),
+    (datetime(2027, 8, 1), 'Launch'),
+]
 
 # Color palette when "Color by: Round" is selected.  Extend as new rounds
 # (Series A, Series B…) appear in the sheet.
@@ -422,21 +427,24 @@ def render_gantt(df: pd.DataFrame, today: datetime,
         ticks='',
         tickfont=dict(size=11, color='#555'),
     )
-    # Launch month: shaded column with a label at the top of the plot.
-    launch_end = LAUNCH_MONTH + relativedelta(months=1)
-    if x_min <= LAUNCH_MONTH < x_max:
+    # Milestone months: shaded column through the chart, label above the
+    # Monthly Burn row.  (Appended to burn_annotations — update_layout below
+    # replaces any annotations added directly to the figure.)
+    for m_start, m_label in MILESTONES:
+        if not (x_min <= m_start < x_max):
+            continue
+        m_end = m_start + relativedelta(months=1)
         fig.add_vrect(
-            x0=LAUNCH_MONTH, x1=launch_end,
+            x0=m_start, x1=m_end,
             fillcolor='rgba(201,162,39,0.18)', line_width=0, layer='below',
         )
-        # (appended to burn_annotations — update_layout below replaces
-        # any annotations added directly to the figure)
         burn_annotations.append(dict(
-            x=LAUNCH_MONTH + (launch_end - LAUNCH_MONTH) / 2, xref='x',
-            y=1.0, yref='paper', yanchor='top', yshift=-4,
-            text='<b>LAUNCH</b>', showarrow=False,
-            font=dict(size=13, color='#8A6D12'),
-            bgcolor='rgba(255,255,255,0.85)',
+            x=m_start + (m_end - m_start) / 2, xref='x',
+            y=1.0, yref='paper', yanchor='bottom', yshift=76,
+            text='<b>' + m_label.upper().replace(' ', '<br>') + '</b>',
+            showarrow=False,
+            font=dict(size=11, color='#8A6D12'),
+            bgcolor='rgba(201,162,39,0.18)', borderpad=3,
         ))
 
     # Month-boundary vertical gridlines (drawn as shapes so they sit between
@@ -461,8 +469,8 @@ def render_gantt(df: pd.DataFrame, today: datetime,
     # top room for the monthly-burn header row).
     n_rows = len(df)
     fig.update_layout(
-        height=ROW_HEIGHT_PX * n_rows + 170,
-        margin=dict(l=20, r=40, t=120, b=40),
+        height=ROW_HEIGHT_PX * n_rows + 210,
+        margin=dict(l=20, r=40, t=160, b=40),
         plot_bgcolor='white',
         paper_bgcolor='white',
         showlegend=False,
