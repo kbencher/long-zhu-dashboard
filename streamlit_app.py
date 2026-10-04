@@ -32,12 +32,15 @@ WORKSTREAM_COLORS = {
 HATCHED_ROUND_PREFIX = 'seed'
 
 # Highlighted months: shaded column + label in the header row above
-# Monthly Burn.  Multi-word labels stack one word per line.
+# Monthly Burn.  Multi-word labels stack one word per line.  full=True
+# extends the shading up through the header (label, burn rows, month).
 MILESTONES = [
-    (datetime(2027, 3, 1), 'Demo Deck'),
-    (datetime(2027, 5, 1), 'Pre-Production Deck'),
-    (datetime(2027, 8, 1), 'Launch'),
+    (datetime(2027, 3, 1), 'Demo Deck',           True),
+    (datetime(2027, 5, 1), 'Pre-Production Deck', False),
+    (datetime(2027, 8, 1), 'Launch',              True),
 ]
+MILESTONE_LABEL_YSHIFT = 76     # px above the plot top
+MILESTONE_LABEL_HEIGHT = 34     # px — two stacked lines + padding
 
 # Color palette when "Color by: Round" is selected.  Extend as new rounds
 # (Series A, Series B…) appear in the sheet.
@@ -430,21 +433,24 @@ def render_gantt(df: pd.DataFrame, today: datetime,
     # Milestone months: shaded column through the chart, label above the
     # Monthly Burn row.  (Appended to burn_annotations — update_layout below
     # replaces any annotations added directly to the figure.)
-    for m_start, m_label in MILESTONES:
+    plot_h = ROW_HEIGHT_PX * len(df) + 10       # height minus top/bottom margins
+    for m_start, m_label, full in MILESTONES:
         if not (x_min <= m_start < x_max):
             continue
         m_end = m_start + relativedelta(months=1)
-        fig.add_vrect(
-            x0=m_start, x1=m_end,
+        y_top = (1 + (MILESTONE_LABEL_YSHIFT + MILESTONE_LABEL_HEIGHT) / plot_h
+                 if full else 1)
+        fig.add_shape(
+            type='rect', x0=m_start, x1=m_end, y0=0, y1=y_top, yref='paper',
             fillcolor='rgba(201,162,39,0.18)', line_width=0, layer='below',
         )
         burn_annotations.append(dict(
             x=m_start + (m_end - m_start) / 2, xref='x',
-            y=1.0, yref='paper', yanchor='bottom', yshift=76,
+            y=1.0, yref='paper', yanchor='bottom', yshift=MILESTONE_LABEL_YSHIFT,
             text='<b>' + m_label.upper().replace(' ', '<br>') + '</b>',
             showarrow=False,
             font=dict(size=11, color='#8A6D12'),
-            bgcolor='rgba(201,162,39,0.18)', borderpad=3,
+            bgcolor=None if full else 'rgba(201,162,39,0.18)', borderpad=3,
         ))
 
     # Month-boundary vertical gridlines (drawn as shapes so they sit between
