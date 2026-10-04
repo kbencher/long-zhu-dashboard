@@ -53,7 +53,7 @@ FILTER_TO_WS = {
 SHEET_KEY = '1rKFY6S-VZFnOkZLs_JeNtZSkFZIkyVbSROSrmx0rb40'
 
 
-TASKS_TAB_GID = 1610950122   # 'Copy of Sheet1' — clean Gantt-input layout
+TASKS_TAB_GID = 1740834373   # 'Data Chartv2' — Gantt-input layout
 
 
 @st.cache_data(ttl=300)
@@ -128,7 +128,8 @@ def load_tasks() -> pd.DataFrame:
         bucket = _bucket_workstream(stream, '')
         out.append({
             'workstream': bucket,
-            'round':      round_ or 'Unspecified',
+            # 'Seed | Launch' → color by the first round listed
+            'round':      round_.split('|')[0].strip() or 'Unspecified',
             'sub':        stream,
             'department': stream,
             'owner':      owner or 'TBD',
