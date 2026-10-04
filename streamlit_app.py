@@ -22,8 +22,7 @@ st.set_page_config(
 
 # ── Workstream colours (match mockup) ───────────────────────────────────────
 WORKSTREAM_COLORS = {
-    'Game Development': '#2D6A3F',
-    'Testing':          '#A03D2D',
+    'Game Development': '#A03D2D',   # red
     'Marketing':        '#1F5A8C',
     'Community':        '#5B47B0',
     'Sales & Ops':      '#6E7479',
@@ -42,7 +41,6 @@ ROUND_COLORS = {
 FILTER_TO_WS = {
     'All':         None,
     'Game Development': 'Game Development',
-    'Testing':     'Testing',
     'Marketing':   'Marketing',
     'Community':   'Community',
     'Sales & Ops': 'Sales & Ops',
@@ -62,7 +60,7 @@ def load_tasks() -> pd.DataFrame:
 
     Layout (row 5 is the header):
         A  (blank)
-        B  Stream         — workstream (Game Development, Testing, Marketing,
+        B  Stream         — workstream (Game Development, Marketing,
                             Community, Sales & Ops)
         C  Owner
         D  Notes          — task description shown on the row label
@@ -147,10 +145,8 @@ def _bucket_workstream(ws_group: str, dept: str) -> str:
     g = (ws_group or '').lower()
     d = (dept or '').lower()
     if 'game' in g or 'identity' in g or 'illustration' in g or 'design' in g \
-            or 'story' in g or 'tournament' in g:
+            or 'story' in g or 'tournament' in g or 'testing' in g:
         return 'Game Development'
-    if 'testing' in g:
-        return 'Testing'
     if 'marketing' in g:
         return 'Marketing'
     if 'community' in g or 'community' in d:
@@ -540,7 +536,6 @@ if color_by_choice == 'Round':
 else:
     legend_items = [
         ('Game Development', WORKSTREAM_COLORS['Game Development']),
-        ('Testing',          WORKSTREAM_COLORS['Testing']),
         ('Marketing',        WORKSTREAM_COLORS['Marketing']),
         ('Community',        WORKSTREAM_COLORS['Community']),
         ('Sales & Ops',      WORKSTREAM_COLORS['Sales & Ops']),
