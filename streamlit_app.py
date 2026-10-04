@@ -31,6 +31,9 @@ WORKSTREAM_COLORS = {
 # everything else (Pre-Seed) is solid.
 HATCHED_ROUND_PREFIX = 'seed'
 
+# Month highlighted on the chart with a "Launch" label.
+LAUNCH_MONTH = datetime(2027, 8, 1)
+
 # Color palette when "Color by: Round" is selected.  Extend as new rounds
 # (Series A, Series B…) appear in the sheet.
 ROUND_COLORS = {
@@ -419,6 +422,23 @@ def render_gantt(df: pd.DataFrame, today: datetime,
         ticks='',
         tickfont=dict(size=11, color='#555'),
     )
+    # Launch month: shaded column with a label at the top of the plot.
+    launch_end = LAUNCH_MONTH + relativedelta(months=1)
+    if x_min <= LAUNCH_MONTH < x_max:
+        fig.add_vrect(
+            x0=LAUNCH_MONTH, x1=launch_end,
+            fillcolor='rgba(201,162,39,0.18)', line_width=0, layer='below',
+        )
+        # (appended to burn_annotations — update_layout below replaces
+        # any annotations added directly to the figure)
+        burn_annotations.append(dict(
+            x=LAUNCH_MONTH + (launch_end - LAUNCH_MONTH) / 2, xref='x',
+            y=1.0, yref='paper', yanchor='top', yshift=-4,
+            text='<b>LAUNCH</b>', showarrow=False,
+            font=dict(size=13, color='#8A6D12'),
+            bgcolor='rgba(255,255,255,0.85)',
+        ))
+
     # Month-boundary vertical gridlines (drawn as shapes so they sit between
     # the labels, not under them).
     for ms in month_starts:
