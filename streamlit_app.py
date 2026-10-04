@@ -36,7 +36,7 @@ HATCHED_ROUND_PREFIX = 'seed'
 # extends the shading up through the header (label, burn rows, month).
 MILESTONES = [
     (datetime(2027, 3, 1), 'Demo Deck',           True),
-    (datetime(2027, 5, 1), 'Pre-Production Deck', False),
+    (datetime(2027, 5, 1), 'Production Deck',     True),
     (datetime(2027, 8, 1), 'Launch',              True),
 ]
 MILESTONE_LABEL_YSHIFT = 76     # px above the plot top
