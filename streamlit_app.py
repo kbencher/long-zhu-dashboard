@@ -431,10 +431,10 @@ def render_gantt(df: pd.DataFrame, today: datetime,
     dev_monthly = _monthly(df[df['workstream'] == 'Game Development'])
     gtm_monthly = _monthly(df[df['workstream'] == 'Go-To-Market'])
     header_rows = [  # (label, values, bold, color) — top row first
-        ('Aggregate Game Development Expense Monthly Burn', dev_monthly, True, WORKSTREAM_COLORS['Game Development']),
-        ('Aggregate Game Development Expense Cumulative',   _cumulative(dev_monthly), False, WORKSTREAM_COLORS['Game Development']),
-        ('Go-To-Market Expense Monthly Burn', gtm_monthly, True, WORKSTREAM_COLORS['Go-To-Market']),
-        ('Go-To-Market Expense Cumulative',   _cumulative(gtm_monthly), False, WORKSTREAM_COLORS['Go-To-Market']),
+        ('Game Development Monthly Burn', dev_monthly, True, WORKSTREAM_COLORS['Game Development']),
+        ('Cumulative',                    _cumulative(dev_monthly), False, WORKSTREAM_COLORS['Game Development']),
+        ('Go-To-Market Monthly Burn', gtm_monthly, True, WORKSTREAM_COLORS['Go-To-Market']),
+        ('Cumulative',                _cumulative(gtm_monthly), False, WORKSTREAM_COLORS['Go-To-Market']),
         ('Total Monthly Burn',       monthly_burn_by_month, True, '#222'),
         ('Total Cumulative',         _cumulative(monthly_burn_by_month), False, '#555'),
     ]
