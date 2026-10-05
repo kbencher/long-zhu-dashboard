@@ -642,7 +642,10 @@ if df_view.empty:
 # Lock the x-axis date range to the FULL dataset so month columns stay the
 # same pixel width whether filtered or unfiltered.
 full_x_min = df['start'].min().replace(day=1)
-full_x_max = (df['end'].max() + relativedelta(months=1)).replace(day=1)
+full_x_max = min(
+    (df['end'].max() + relativedelta(months=1)).replace(day=1),
+    datetime(2028, 1, 1),
+)
 
 fig = render_gantt(
     df_view, today=datetime.now(),
