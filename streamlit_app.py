@@ -384,12 +384,6 @@ def render_gantt(df: pd.DataFrame, today: datetime,
 
     # (y-axis ordering set later via categoryarray or autorange)
 
-    # Vertical "Today" marker
-    fig.add_vline(
-        x=today,
-        line=dict(color='#e74c3c', width=2),
-    )
-
     # X-axis: monthly labels centered between gridlines.
     # Use the FULL date range (not the filtered view's) so column widths
     # stay constant whether filtered or unfiltered.
@@ -607,33 +601,22 @@ else:
     legend_items = [(g, WORKSTREAM_COLORS.get(g, '#6E7479'))
                     for g in dict.fromkeys(df['workstream'])]
 
-legend_html = (
-    '<div class="lz-legend" style="display:flex; gap:18px; align-items:center; '
-    'font-size:13px; color:#444; margin-top:6px; margin-bottom:14px;">'
-)
-for label, color in legend_items:
-    legend_html += (
-        f'<span style="display:inline-flex;align-items:center;gap:6px;">'
-        f'<span style="display:inline-block;width:10px;height:10px;border-radius:2px;'
-        f'background:{color};"></span>{label}</span>'
-    )
+_legend_row = ('<div class="lz-legend" style="display:flex; gap:18px; align-items:center; '
+               'font-size:13px; color:#444; margin-top:6px; margin-bottom:{mb}px;">')
+_swatch = ('<span style="display:inline-flex;align-items:center;gap:6px;">'
+           '<span style="display:inline-block;width:{w}px;height:10px;border-radius:2px;'
+           'background:{bg};"></span>{label}</span>')
 _hatch = ('repeating-linear-gradient(45deg,rgba(255,255,255,.55) 0 1px,transparent 1px 5px),'
           'repeating-linear-gradient(-45deg,rgba(255,255,255,.55) 0 1px,transparent 1px 5px),#777')
-legend_html += (
-    '<span style="color:#bbb;">|</span>'
-    '<span style="display:inline-flex;align-items:center;gap:6px;">'
-    '<span style="display:inline-block;width:18px;height:10px;border-radius:2px;background:#777;"></span>'
-    'Pre-Seed</span>'
-    '<span style="display:inline-flex;align-items:center;gap:6px;">'
-    f'<span style="display:inline-block;width:18px;height:10px;border-radius:2px;background:{_hatch};"></span>'
-    'Seed</span>'
-    '<span style="color:#bbb;">|</span>'
-)
-legend_html += (
-    '<span style="display:inline-flex;align-items:center;gap:6px;">'
-    '<span style="display:inline-block;width:2px;height:14px;background:#e74c3c;"></span>'
-    'Today</span></div>'
-)
+
+# Row 1: Chart groups (or rounds).  Row 2: solid vs cross-hatched funding.
+legend_html = _legend_row.format(mb=2)
+for label, color in legend_items:
+    legend_html += _swatch.format(w=10, bg=color, label=label)
+legend_html += '</div>' + _legend_row.format(mb=14)
+legend_html += _swatch.format(w=18, bg='#777', label='Pre-Seed')
+legend_html += _swatch.format(w=18, bg=_hatch, label='Seed | Launch')
+legend_html += '</div>'
 st.markdown(legend_html, unsafe_allow_html=True)
 
 # Apply filters — remove non-matching rows so each visible row keeps the
