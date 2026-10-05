@@ -39,6 +39,13 @@ MILESTONES = [
     (datetime(2027, 5, 1), 'Production Deck',     True),
     (datetime(2027, 8, 1), 'Launch',              True),
 ]
+# Tasks whose bar switches to cross-hatched (Seed-funded) partway through:
+# (Notes prefix, first hatched month).  The bar is split into a solid and a
+# hatched segment on the same row; each segment shows its own cost.
+FUNDING_SPLITS = [
+    ('Community Management Plan', datetime(2027, 6, 1)),
+]
+
 MILESTONE_LABEL_YSHIFT = 76     # px above the plot top
 MILESTONE_LABEL_HEIGHT = 34     # px — two stacked lines + padding
 
@@ -203,7 +210,25 @@ def prepare_df(df: pd.DataFrame) -> pd.DataFrame:
     df['_label'] = [f"{lbl}<span style='display:none'>{i}</span>"
                      for i, lbl in enumerate(df['_label'])]
     df['_color'] = df['workstream'].map(WORKSTREAM_COLORS)
-    return df
+
+    # Split bars per FUNDING_SPLITS (both segments keep the row's _label).
+    rows = []
+    for _, r in df.iterrows():
+        split = next((d for prefix, d in FUNDING_SPLITS
+                      if r['notes'].startswith(prefix)
+                      and r['start'] < d < r['end']), None)
+        if split is None:
+            rows.append(r)
+            continue
+        for seg_start, seg_end, hatched in ((r['start'], split, r['hatched']),
+                                            (split, r['end'], True)):
+            seg = r.copy()
+            seg['start'], seg['end'], seg['hatched'] = seg_start, seg_end, hatched
+            seg['months'] = ((seg_end.year - seg_start.year) * 12
+                             + seg_end.month - seg_start.month)
+            seg['total_cost'] = r['monthly_cost'] * seg['months']
+            rows.append(seg)
+    return pd.DataFrame(rows).reset_index(drop=True)
 
 
 ROW_HEIGHT_PX = 50      # fixed height per task row
@@ -433,7 +458,7 @@ def render_gantt(df: pd.DataFrame, today: datetime,
     # Milestone months: shaded column through the chart, label above the
     # Monthly Burn row.  (Appended to burn_annotations — update_layout below
     # replaces any annotations added directly to the figure.)
-    plot_h = ROW_HEIGHT_PX * len(df) + 10       # height minus top/bottom margins
+    plot_h = ROW_HEIGHT_PX * df['_label'].nunique() + 10       # height minus top/bottom margins
     for m_start, m_label, full in MILESTONES:
         if not (x_min <= m_start < x_max):
             continue
@@ -473,7 +498,7 @@ def render_gantt(df: pd.DataFrame, today: datetime,
     # Fixed row height — each visible row is ROW_HEIGHT_PX pixels tall.
     # Chart total height = rows × pixel/row + top/bottom margins (extra
     # top room for the monthly-burn header row).
-    n_rows = len(df)
+    n_rows = df['_label'].nunique()
     fig.update_layout(
         height=ROW_HEIGHT_PX * n_rows + 210,
         margin=dict(l=20, r=40, t=160, b=40),
@@ -635,5 +660,5 @@ fig = render_gantt(
 )
 st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
-st.caption(f'{len(df_view)} active task(s) shown · '
+st.caption(f"{df_view['_label'].nunique()} active task(s) shown · "
             f'Source: Long Zhu Budget Google Sheet (auto-refreshes every 5 min)')
