@@ -230,6 +230,8 @@ def prepare_df(df: pd.DataFrame) -> pd.DataFrame:
                                             (split, r['end'], True)):
             seg = r.copy()
             seg['start'], seg['end'], seg['hatched'] = seg_start, seg_end, hatched
+            if hatched:
+                seg['round'] = 'Seed'
             seg['months'] = ((seg_end.year - seg_start.year) * 12
                              + seg_end.month - seg_start.month)
             seg['total_cost'] = r['monthly_cost'] * seg['months']
