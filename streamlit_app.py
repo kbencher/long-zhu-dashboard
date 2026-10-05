@@ -50,7 +50,7 @@ FUNDING_SPLITS = [
 HEADER_ROW_BOTTOM = 42
 HEADER_ROW_STEP = 20
 CUMULATIVE_GROUPS = ['Game Development', 'Go-To-Market']
-_N_HEADER_ROWS = 6  # 2 rows per group + 2 total rows
+_N_HEADER_ROWS = 2
 MILESTONE_LABEL_YSHIFT = HEADER_ROW_BOTTOM + HEADER_ROW_STEP * _N_HEADER_ROWS - 6
 HEADER_TOP_MARGIN = MILESTONE_LABEL_YSHIFT + 84
 MILESTONE_LABEL_HEIGHT = 34     # px — two stacked lines + padding
@@ -329,7 +329,8 @@ def render_gantt_3d(df: pd.DataFrame, color_by: str = 'workstream'):
 
 def render_gantt(df: pd.DataFrame, today: datetime,
                   full_date_range: tuple = None,
-                  color_by: str = 'workstream'):
+                  color_by: str = 'workstream',
+                  workstream_filter: str = None):
     """Render the Gantt.  `color_by` selects which column drives the bar
     color — 'workstream' (default) or 'round'.  Pass `full_date_range=(x_min,
     x_max)` to keep column widths the same whether filtered or not."""
@@ -428,15 +429,18 @@ def render_gantt(df: pd.DataFrame, today: datetime,
         return f'<b>{t}</b>' if bold else t
 
     monthly_burn_by_month = _monthly(df)
-    dev_monthly = _monthly(df[df['workstream'] == 'Game Development'])
-    gtm_monthly = _monthly(df[df['workstream'] == 'Go-To-Market'])
+    if workstream_filter == 'Game Development':
+        burn_label = 'Game Development Monthly Burn'
+        burn_color = WORKSTREAM_COLORS['Game Development']
+    elif workstream_filter == 'Go-To-Market':
+        burn_label = 'Go-To-Market Monthly Burn'
+        burn_color = WORKSTREAM_COLORS['Go-To-Market']
+    else:
+        burn_label = 'Total Monthly Burn'
+        burn_color = '#222'
     header_rows = [  # (label, values, bold, color) — top row first
-        ('Game Development Monthly Burn', dev_monthly, True, WORKSTREAM_COLORS['Game Development']),
-        ('Cumulative',                    _cumulative(dev_monthly), False, WORKSTREAM_COLORS['Game Development']),
-        ('Go-To-Market Monthly Burn', gtm_monthly, True, WORKSTREAM_COLORS['Go-To-Market']),
-        ('Cumulative',                _cumulative(gtm_monthly), False, WORKSTREAM_COLORS['Go-To-Market']),
-        ('Total Monthly Burn',       monthly_burn_by_month, True, '#222'),
-        ('Total Cumulative',         _cumulative(monthly_burn_by_month), False, '#555'),
+        (burn_label,   monthly_burn_by_month,           True,  burn_color),
+        ('Cumulative', _cumulative(monthly_burn_by_month), False, burn_color),
     ]
     header_yshifts = [HEADER_ROW_BOTTOM + HEADER_ROW_STEP * (len(header_rows) - 1 - k)
                       for k in range(len(header_rows))]
@@ -644,6 +648,7 @@ fig = render_gantt(
     df_view, today=datetime.now(),
     full_date_range=(full_x_min, full_x_max),
     color_by='round' if color_by_choice == 'Round' else 'workstream',
+    workstream_filter=selected_ws,
 )
 st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
