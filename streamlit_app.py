@@ -50,7 +50,7 @@ FUNDING_SPLITS = [
 HEADER_ROW_BOTTOM = 42
 HEADER_ROW_STEP = 20
 CUMULATIVE_GROUPS = ['Game Development', 'Go-To-Market']
-_N_HEADER_ROWS = 2 + len(CUMULATIVE_GROUPS)
+_N_HEADER_ROWS = 6  # 2 rows per group + 2 total rows
 MILESTONE_LABEL_YSHIFT = HEADER_ROW_BOTTOM + HEADER_ROW_STEP * _N_HEADER_ROWS - 6
 HEADER_TOP_MARGIN = MILESTONE_LABEL_YSHIFT + 84
 MILESTONE_LABEL_HEIGHT = 34     # px — two stacked lines + padding
@@ -428,13 +428,15 @@ def render_gantt(df: pd.DataFrame, today: datetime,
         return f'<b>{t}</b>' if bold else t
 
     monthly_burn_by_month = _monthly(df)
-    header_rows = [  # (label, values, bold, color)
-        ('Monthly Burn', monthly_burn_by_month, True, '#222'),
-        ('Cumulative Burn', _cumulative(monthly_burn_by_month), False, '#555'),
-    ] + [
-        (f'Cum. {g}', _cumulative(_monthly(df[df['workstream'] == g])),
-         False, WORKSTREAM_COLORS[g])
-        for g in CUMULATIVE_GROUPS
+    dev_monthly = _monthly(df[df['workstream'] == 'Game Development'])
+    gtm_monthly = _monthly(df[df['workstream'] == 'Go-To-Market'])
+    header_rows = [  # (label, values, bold, color) — top row first
+        ('Aggregate Game Development Expense Monthly Burn', dev_monthly, True, WORKSTREAM_COLORS['Game Development']),
+        ('Aggregate Game Development Expense Cumulative',   _cumulative(dev_monthly), False, WORKSTREAM_COLORS['Game Development']),
+        ('Go-To-Market Expense Monthly Burn', gtm_monthly, True, WORKSTREAM_COLORS['Go-To-Market']),
+        ('Go-To-Market Expense Cumulative',   _cumulative(gtm_monthly), False, WORKSTREAM_COLORS['Go-To-Market']),
+        ('Total Monthly Burn',       monthly_burn_by_month, True, '#222'),
+        ('Total Cumulative',         _cumulative(monthly_burn_by_month), False, '#555'),
     ]
     header_yshifts = [HEADER_ROW_BOTTOM + HEADER_ROW_STEP * (len(header_rows) - 1 - k)
                       for k in range(len(header_rows))]
