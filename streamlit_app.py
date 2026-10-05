@@ -46,7 +46,13 @@ FUNDING_SPLITS = [
     ('Community Management Plan', datetime(2027, 6, 1)),
 ]
 
-MILESTONE_LABEL_YSHIFT = 76     # px above the plot top
+# Header rows above the chart (burn rows), bottom-up spacing in px.
+HEADER_ROW_BOTTOM = 42
+HEADER_ROW_STEP = 20
+CUMULATIVE_GROUPS = ['Game Development', 'Go-To-Market']
+_N_HEADER_ROWS = 2 + len(CUMULATIVE_GROUPS)
+MILESTONE_LABEL_YSHIFT = HEADER_ROW_BOTTOM + HEADER_ROW_STEP * _N_HEADER_ROWS - 6
+HEADER_TOP_MARGIN = MILESTONE_LABEL_YSHIFT + 84
 MILESTONE_LABEL_HEIGHT = 34     # px — two stacked lines + padding
 
 # Color palette when "Color by: Round" is selected.  Extend as new rounds
@@ -400,47 +406,60 @@ def render_gantt(df: pd.DataFrame, today: datetime,
         tickvals.append(mid)
         ticktext.append(f"<b>{month_starts[i].strftime('%b %y')}</b>")
 
-    # Monthly burn row: sum of monthly_cost across all tasks active in
-    # each month (shown above the calendar header). Cumulative burn row
-    # is a running total of monthly burn through each month.
-    monthly_burn_by_month = []
-    for i in range(len(month_starts) - 1):
-        m0 = month_starts[i]
-        m1 = month_starts[i + 1]
-        burn = 0.0
-        for _, r in df.iterrows():
-            if r['start'] < m1 and r['end'] > m0:
-                burn += float(r.get('monthly_cost') or 0)
-        monthly_burn_by_month.append(burn)
-    cumulative_burn_by_month = []
-    running = 0.0
-    for b in monthly_burn_by_month:
-        running += b
-        cumulative_burn_by_month.append(running)
+    # Header rows (shown above the calendar header), one value per month:
+    #   Monthly Burn     — sum of monthly_cost across tasks active that month
+    #   Cumulative Burn  — running total of Monthly Burn
+    #   Cum. <group>     — running total for each Chart group (Game
+    #                      Development, Go-To-Market)
+    def _monthly(rows):
+        out = []
+        for i in range(len(month_starts) - 1):
+            m0, m1 = month_starts[i], month_starts[i + 1]
+            out.append(sum(float(r.get('monthly_cost') or 0)
+                           for _, r in rows.iterrows()
+                           if r['start'] < m1 and r['end'] > m0))
+        return out
+
+    def _cumulative(vals):
+        out, running = [], 0.0
+        for v in vals:
+            running += v
+            out.append(running)
+        return out
+
+    def _k(v, bold=False):
+        if not v:
+            return ''
+        t = f'${v/1000:,.0f}K' if v >= 1000 else f'${v:,.0f}'
+        return f'<b>{t}</b>' if bold else t
+
+    monthly_burn_by_month = _monthly(df)
+    header_rows = [  # (label, values, bold, color)
+        ('Monthly Burn', monthly_burn_by_month, True, '#222'),
+        ('Cumulative Burn', _cumulative(monthly_burn_by_month), False, '#555'),
+    ] + [
+        (f'Cum. {g}', _cumulative(_monthly(df[df['workstream'] == g])),
+         False, WORKSTREAM_COLORS[g])
+        for g in CUMULATIVE_GROUPS
+    ]
+    header_yshifts = [HEADER_ROW_BOTTOM + HEADER_ROW_STEP * (len(header_rows) - 1 - k)
+                      for k in range(len(header_rows))]
 
     burn_annotations = []
-    for i, mid in enumerate(tickvals):
-        amt = monthly_burn_by_month[i]
-        cum = cumulative_burn_by_month[i]
-        burn_annotations.append(dict(
-            x=mid, xref='x',
-            y=1.0, yref='paper',
-            yshift=62,                       # top row: Monthly Burn
-            text=(f'<b>${amt/1000:,.0f}K</b>' if amt >= 1000
-                  else (f'<b>${amt:,.0f}</b>' if amt else '')),
-            showarrow=False,
-            font=dict(size=11, color='#222'),
-            xanchor='center', yanchor='middle',
-        ))
-        burn_annotations.append(dict(
-            x=mid, xref='x',
-            y=1.0, yref='paper',
-            yshift=42,                       # 2nd row: Cumulative Burn
-            text=(f'${cum/1000:,.0f}K' if cum >= 1000
-                  else (f'${cum:,.0f}' if cum else '')),
-            showarrow=False,
-            font=dict(size=11, color='#555'),
-            xanchor='center', yanchor='middle',
+    header_label_annotations = []
+    for (label, vals, bold, color), ys in zip(header_rows, header_yshifts):
+        for i, mid in enumerate(tickvals):
+            burn_annotations.append(dict(
+                x=mid, xref='x', y=1.0, yref='paper', yshift=ys,
+                text=_k(vals[i], bold), showarrow=False,
+                font=dict(size=11, color=color),
+                xanchor='center', yanchor='middle',
+            ))
+        header_label_annotations.append(dict(
+            x=0, xref='paper', y=1.0, yref='paper', yshift=ys,
+            text=f'<b>{label}:</b>', showarrow=False,
+            font=dict(size=11, color=color if color != '#222' else '#555'),
+            xanchor='right', yanchor='middle', xshift=-10,
         ))
 
     fig.update_xaxes(
@@ -500,30 +519,13 @@ def render_gantt(df: pd.DataFrame, today: datetime,
     # top room for the monthly-burn header row).
     n_rows = df['_label'].nunique()
     fig.update_layout(
-        height=ROW_HEIGHT_PX * n_rows + 210,
-        margin=dict(l=20, r=40, t=160, b=40),
+        height=ROW_HEIGHT_PX * n_rows + HEADER_TOP_MARGIN + 50,
+        margin=dict(l=20, r=40, t=HEADER_TOP_MARGIN, b=40),
         plot_bgcolor='white',
         paper_bgcolor='white',
         showlegend=False,
         bargap=0.30,
-        annotations=burn_annotations + [
-            dict(
-                x=0, xref='paper', y=1.0, yref='paper', yshift=62,
-                text='<b>Monthly Burn:</b>',
-                showarrow=False,
-                font=dict(size=11, color='#555'),
-                xanchor='right', yanchor='middle',
-                xshift=-10,
-            ),
-            dict(
-                x=0, xref='paper', y=1.0, yref='paper', yshift=42,
-                text='<b>Cumulative Burn:</b>',
-                showarrow=False,
-                font=dict(size=11, color='#555'),
-                xanchor='right', yanchor='middle',
-                xshift=-10,
-            ),
-        ],
+        annotations=burn_annotations + header_label_annotations,
     )
     return fig
 
