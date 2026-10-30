@@ -14,7 +14,7 @@ import streamlit as st
 # Set by the "Show $" toggle.  When off, every dollar amount is removed —
 # bar labels, burn rows, and hover — and cost data is left out of the chart
 # payload entirely.
-SHOW_COSTS = True
+SHOW_COSTS = False
 
 # ── Page setup ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -589,8 +589,9 @@ with col_stream:
     )
     if filter_choice is None:
         filter_choice = 'All'
-    SHOW_COSTS = st.toggle('Show $', value=True,
-                           help='Turn off to hide all dollar amounts')
+    # Off by default; keyed so it holds its state across filter changes.
+    SHOW_COSTS = st.toggle('Show $', value=False, key='show_costs',
+                           help='Turn on to show dollar amounts')
 
 with col_owner:
     all_owners = sorted({o for o in df['owner'].dropna().unique() if o})
