@@ -11,10 +11,10 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-# False when launched via timeline_no_cost.py (runpy init_globals), which
-# serves the same chart with every dollar amount removed — bar labels, burn
-# rows, and hover — and keeps cost data out of the page payload entirely.
-SHOW_COSTS = not globals().get('HIDE_COSTS', False)
+# Set by the "Show $" toggle.  When off, every dollar amount is removed —
+# bar labels, burn rows, and hover — and cost data is left out of the chart
+# payload entirely.
+SHOW_COSTS = True
 
 # ── Page setup ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -596,6 +596,8 @@ with col_stream:
         label_visibility='visible',
         horizontal=True,
     )
+    SHOW_COSTS = st.toggle('Show $', value=True,
+                           help='Turn off to hide all dollar amounts')
 
 with col_owner:
     all_owners = sorted({o for o in df['owner'].dropna().unique() if o})
