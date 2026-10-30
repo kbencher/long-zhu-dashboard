@@ -66,8 +66,15 @@ ROUND_COLORS = {
     'Series B': '#A03D2D',   # red
 }
 # Workstream filter pills (All / Game Development / Go-To-Market).  Hidden
-# for now — set True to bring them back.
+# for now — set True to bring them back.  While hidden, a single workstream
+# can still be shown via the URL: ?stream=gtm or ?stream=gamedev.
 SHOW_WORKSTREAM_FILTER = False
+STREAM_URL_PARAM = {
+    'gtm':          'Go-To-Market',
+    'go-to-market': 'Go-To-Market',
+    'gamedev':      'Game Development',
+    'game-development': 'Game Development',
+}
 FILTER_TO_WS = {
     'All':              None,
     'Game Development': 'Game Development',
@@ -589,7 +596,8 @@ with col_stream:
         list(FILTER_TO_WS.keys()),
         default='All',
         label_visibility='visible',
-    ) if SHOW_WORKSTREAM_FILTER else 'All'
+    ) if SHOW_WORKSTREAM_FILTER else STREAM_URL_PARAM.get(
+        str(st.query_params.get('stream', '')).lower(), 'All')
     if filter_choice is None:
         filter_choice = 'All'
     # Off by default; keyed so it holds its state across filter changes.
