@@ -69,6 +69,9 @@ ROUND_COLORS = {
 # for now — set True to bring them back.  While hidden, a single workstream
 # can still be shown via the URL: ?stream=gtm or ?stream=gamedev.
 SHOW_WORKSTREAM_FILTER = False
+# Legend row for the Chart groups (Game Development / Go-To-Market colors).
+# Hidden for now — set True to bring it back.  Funding row always shows.
+SHOW_GROUP_LEGEND = False
 STREAM_URL_PARAM = {
     'gtm':          'Go-To-Market',
     'go-to-market': 'Go-To-Market',
@@ -626,11 +629,14 @@ _swatch = ('<span style="display:inline-flex;align-items:center;gap:6px;">'
 _hatch = ('repeating-linear-gradient(45deg,rgba(255,255,255,.55) 0 1px,transparent 1px 5px),'
           'repeating-linear-gradient(-45deg,rgba(255,255,255,.55) 0 1px,transparent 1px 5px),#777')
 
-# Row 1: Chart groups.  Row 2: solid vs cross-hatched funding.
-legend_html = _legend_row.format(mb=2)
-for label, color in legend_items:
-    legend_html += _swatch.format(w=10, bg=color, label=label)
-legend_html += '</div>' + _legend_row.format(mb=14)
+# Row 1: Chart groups (if SHOW_GROUP_LEGEND).  Row 2: solid vs cross-hatched funding.
+legend_html = ''
+if SHOW_GROUP_LEGEND:
+    legend_html += _legend_row.format(mb=2)
+    for label, color in legend_items:
+        legend_html += _swatch.format(w=10, bg=color, label=label)
+    legend_html += '</div>'
+legend_html += _legend_row.format(mb=14)
 legend_html += _swatch.format(w=18, bg='#777', label='Pre-Seed')
 legend_html += _swatch.format(w=18, bg=_hatch, label='Seed | Launch')
 legend_html += '</div>'
