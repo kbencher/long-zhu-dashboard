@@ -578,7 +578,7 @@ except Exception as e:
     st.error(f'Could not load Long Zhu Budget sheet: {e}')
     st.stop()
 
-# Filter row: Workstream pills + Owner multi-select (Color-by below)
+# Filter row: Workstream pills + Owner multi-select (Show $ toggle below)
 col_stream, col_owner = st.columns([3, 2])
 with col_stream:
     filter_choice = st.pills(
@@ -589,13 +589,6 @@ with col_stream:
     )
     if filter_choice is None:
         filter_choice = 'All'
-    color_by_choice = st.radio(
-        'Color by:',
-        options=['Stream', 'Round'],
-        index=0,
-        label_visibility='visible',
-        horizontal=True,
-    )
     SHOW_COSTS = st.toggle('Show $', value=True,
                            help='Turn off to hide all dollar amounts')
 
@@ -609,14 +602,9 @@ with col_owner:
         label_visibility='visible',
     )
 
-# Legend pills (visual reference, not interactive) — driven by color choice
-if color_by_choice == 'Round':
-    # Show only rounds actually present in the data, in a stable order
-    present = [r for r in ROUND_COLORS if r in set(df['round'].dropna())]
-    legend_items = [(r, ROUND_COLORS[r]) for r in present]
-else:
-    legend_items = [(g, WORKSTREAM_COLORS.get(g, '#6E7479'))
-                    for g in dict.fromkeys(df['workstream'])]
+# Legend pills (visual reference, not interactive)
+legend_items = [(g, WORKSTREAM_COLORS.get(g, '#6E7479'))
+                for g in dict.fromkeys(df['workstream'])]
 
 _legend_row = ('<div class="lz-legend" style="display:flex; gap:18px; align-items:center; '
                'font-size:13px; color:#444; margin-top:6px; margin-bottom:{mb}px;">')
@@ -626,7 +614,7 @@ _swatch = ('<span style="display:inline-flex;align-items:center;gap:6px;">'
 _hatch = ('repeating-linear-gradient(45deg,rgba(255,255,255,.55) 0 1px,transparent 1px 5px),'
           'repeating-linear-gradient(-45deg,rgba(255,255,255,.55) 0 1px,transparent 1px 5px),#777')
 
-# Row 1: Chart groups (or rounds).  Row 2: solid vs cross-hatched funding.
+# Row 1: Chart groups.  Row 2: solid vs cross-hatched funding.
 legend_html = _legend_row.format(mb=2)
 for label, color in legend_items:
     legend_html += _swatch.format(w=10, bg=color, label=label)
@@ -661,7 +649,6 @@ full_x_max = min(
 fig = render_gantt(
     df_view, today=datetime.now(),
     full_date_range=(full_x_min, full_x_max),
-    color_by='round' if color_by_choice == 'Round' else 'workstream',
     workstream_filter=selected_ws,
 )
 st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
