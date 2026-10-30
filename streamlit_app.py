@@ -65,6 +65,9 @@ ROUND_COLORS = {
     'Series A': '#2D6A3F',   # green
     'Series B': '#A03D2D',   # red
 }
+# Workstream filter pills (All / Game Development / Go-To-Market).  Hidden
+# for now — set True to bring them back.
+SHOW_WORKSTREAM_FILTER = False
 FILTER_TO_WS = {
     'All':              None,
     'Game Development': 'Game Development',
@@ -586,7 +589,7 @@ with col_stream:
         list(FILTER_TO_WS.keys()),
         default='All',
         label_visibility='visible',
-    )
+    ) if SHOW_WORKSTREAM_FILTER else 'All'
     if filter_choice is None:
         filter_choice = 'All'
     # Off by default; keyed so it holds its state across filter changes.
