@@ -11,6 +11,10 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+# False when launched via timeline_no_cost.py (runpy init_globals), which
+# serves the same chart with every dollar amount removed — bar labels, burn
+# rows, and hover — and keeps cost data out of the page payload entirely.
+SHOW_COSTS = not globals().get('HIDE_COSTS', False)
 
 # ── Page setup ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -50,9 +54,6 @@ FUNDING_SPLITS = [
 HEADER_ROW_BOTTOM = 42
 HEADER_ROW_STEP = 20
 CUMULATIVE_GROUPS = ['Game Development', 'Go-To-Market']
-_N_HEADER_ROWS = 2
-MILESTONE_LABEL_YSHIFT = HEADER_ROW_BOTTOM + HEADER_ROW_STEP * _N_HEADER_ROWS - 6
-HEADER_TOP_MARGIN = MILESTONE_LABEL_YSHIFT + 84
 MILESTONE_LABEL_HEIGHT = 34     # px — two stacked lines + padding
 
 # Color palette when "Color by: Round" is selected.  Extend as new rounds
@@ -344,7 +345,8 @@ def render_gantt(df: pd.DataFrame, today: datetime,
     def _fmt_money(v):
         if not v: return ''
         return f'<b>${v:,.0f}</b>'
-    df['_cost_label'] = df.get('total_cost', pd.Series([0]*len(df))).apply(_fmt_money)
+    df['_cost_label'] = (df.get('total_cost', pd.Series([0]*len(df))).apply(_fmt_money)
+                         if SHOW_COSTS else '')
     if color_by == 'round':
         color_col = 'round'
         color_map = ROUND_COLORS
@@ -361,7 +363,8 @@ def render_gantt(df: pd.DataFrame, today: datetime,
         text='_cost_label',
         pattern_shape='hatched',
         pattern_shape_map={False: '', True: 'x'},
-        custom_data=['owner', 'notes', 'department', 'total_cost', 'monthly_cost'],
+        custom_data=(['owner', 'notes', 'department', 'total_cost', 'monthly_cost']
+                     if SHOW_COSTS else ['owner', 'notes', 'department']),
     )
 
     # Style the total-cost label overlaid inside each bar, plus rounded corners.
@@ -373,9 +376,10 @@ def render_gantt(df: pd.DataFrame, today: datetime,
         hovertemplate=(
             '<b>%{customdata[1]}</b><br>'
             'Owner: %{customdata[0]}<br>'
-            '%{base|%b %Y} → %{x|%b %Y}<br>'
-            'Total: $%{customdata[3]:,.0f}<br>'
-            'Monthly: $%{customdata[4]:,.0f}<extra></extra>'
+            '%{base|%b %Y} → %{x|%b %Y}'
+            + ('<br>Total: $%{customdata[3]:,.0f}<br>'
+               'Monthly: $%{customdata[4]:,.0f}' if SHOW_COSTS else '')
+            + '<extra></extra>'
         ),
     )
 
@@ -443,7 +447,10 @@ def render_gantt(df: pd.DataFrame, today: datetime,
     header_rows = [  # (label, values, bold, color) — top row first
         (burn_label,   monthly_burn_by_month,           True,  burn_color),
         ('Cumulative', _cumulative(monthly_burn_by_month), False, burn_color),
-    ]
+    ] if SHOW_COSTS else []
+    # Milestone labels sit just above the header rows; top margin fits both.
+    milestone_yshift = HEADER_ROW_BOTTOM + HEADER_ROW_STEP * len(header_rows) - 6
+    top_margin = milestone_yshift + 84
     header_yshifts = [HEADER_ROW_BOTTOM + HEADER_ROW_STEP * (len(header_rows) - 1 - k)
                       for k in range(len(header_rows))]
 
@@ -484,7 +491,7 @@ def render_gantt(df: pd.DataFrame, today: datetime,
         if not (x_min <= m_start < x_max):
             continue
         m_end = m_start + relativedelta(months=1)
-        y_top = (1 + (MILESTONE_LABEL_YSHIFT + MILESTONE_LABEL_HEIGHT) / plot_h
+        y_top = (1 + (milestone_yshift + MILESTONE_LABEL_HEIGHT) / plot_h
                  if full else 1)
         fig.add_shape(
             type='rect', x0=m_start, x1=m_end, y0=0, y1=y_top, yref='paper',
@@ -492,7 +499,7 @@ def render_gantt(df: pd.DataFrame, today: datetime,
         )
         burn_annotations.append(dict(
             x=m_start + (m_end - m_start) / 2, xref='x',
-            y=1.0, yref='paper', yanchor='bottom', yshift=MILESTONE_LABEL_YSHIFT,
+            y=1.0, yref='paper', yanchor='bottom', yshift=milestone_yshift,
             text='<b>' + m_label.upper().replace(' ', '<br>') + '</b>',
             showarrow=False,
             font=dict(size=11, color='#8A6D12'),
@@ -521,8 +528,8 @@ def render_gantt(df: pd.DataFrame, today: datetime,
     # top room for the monthly-burn header row).
     n_rows = df['_label'].nunique()
     fig.update_layout(
-        height=ROW_HEIGHT_PX * n_rows + HEADER_TOP_MARGIN + 50,
-        margin=dict(l=20, r=40, t=HEADER_TOP_MARGIN, b=40),
+        height=ROW_HEIGHT_PX * n_rows + top_margin + 50,
+        margin=dict(l=20, r=40, t=top_margin, b=40),
         plot_bgcolor='white',
         paper_bgcolor='white',
         showlegend=False,
