@@ -8,3 +8,6 @@ venv/
 *.json
 !*.example.json
 .streamlit/secrets.toml
+*.png
+*.xlsx
+*.csv
